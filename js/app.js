@@ -38,9 +38,13 @@ function takeFile(f){
   if(userURL)URL.revokeObjectURL(userURL);
   userURL=URL.createObjectURL(f);
   // 校验：能不能打开、时长、横竖屏
-  const v=document.createElement('video');v.muted=true;v.preload='metadata';v.src=userURL;
-  v.onerror=()=>{location.hash='#/fail/unreadable'};
+  // iOS 不一定主动加载元数据：主动 load()，静音 play() 一下催它，10 秒没反应就当打不开
+  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';v.src=userURL;v.load();
+  v.play().then(()=>v.pause()).catch(()=>{});
+  const giveUp=setTimeout(()=>{v.onloadedmetadata=null;location.hash='#/fail/unreadable'},10000);
+  v.onerror=()=>{clearTimeout(giveUp);location.hash='#/fail/unreadable'};
   v.onloadedmetadata=async()=>{
+    clearTimeout(giveUp);
     if(!isFinite(v.duration)||v.duration<=0)location.hash='#/fail/unreadable';
     else if(v.duration>60.5)location.hash='#/fail/long';
     else if(v.videoWidth>v.videoHeight)location.hash='#/fail/landscape';
@@ -51,6 +55,10 @@ function takeFile(f){
 
 /* ---- 识别（js/pose.js） ---- */
 const job={abort:false};
+// 诊断：地址加 ?debug=1，处理页显示每一步的耗时和报错（手机上卡住时截图给开发看）
+const DEBUG=/[?&]debug=1/.test(location.search);
+if(DEBUG){$('procLog').hidden=false;Pose.onLog=l=>{const el=$('procLog');el.textContent+=l+'\n';el.scrollTop=el.scrollHeight};
+  window.addEventListener('error',e=>Pose.onLog('页面报错：'+e.message));window.addEventListener('unhandledrejection',e=>Pose.onLog('未处理的报错：'+(e.reason&&e.reason.message||e.reason)))}
 const MSG={model:'正在准备识别模型（约 9MB，第一次要下载一会儿）。',
   scan:'逐帧找你的手和脚。视频只在你的手机上处理，不会上传；处理时别切走页面。',
   post:'快好了，在找你抓过的岩点。'};
@@ -61,15 +69,21 @@ async function run(dur){
   const total=Math.max(2,Math.round(dur*30));
   const count=n=>Dots.render($('procCount'),String(n).padStart(String(total).length,'0')+'/'+total,4,INK);
   count(0);fillTo($('procFill'),0);
+  // 看门狗：逐帧识别阶段 40 秒没有任何进展就停（模型下载阶段 pose.js 自己有 90 秒超时）
+  let last=Date.now(),stage='model',stuck=false;
+  const dog=setInterval(()=>{if(stage==='scan'&&Date.now()-last>40000){stuck=true;job.abort=true}},2000);
   let r;
   try{
     r=await Pose.analyze(userURL,{abort:()=>job.abort,
-      onStage:s=>{$('procMsg').textContent=MSG[s]},
-      onProgress:(n,N)=>{count(n);fillTo($('procFill'),n/N)}});
+      onStage:s=>{stage=s;last=Date.now();$('procMsg').textContent=MSG[s]},
+      onProgress:(n,N)=>{last=Date.now();count(n);fillTo($('procFill'),n/N)}});
   }catch(e){
+    clearInterval(dog);
+    if(stuck){location.hash='#/fail/stuck';return}
     if(e.message==='abort')return;
     location.hash='#/fail/'+(['unreadable','model','device'].includes(e.message)?e.message:'device');return;
   }
+  clearInterval(dog);
   if(job.abort)return;
   // 能不能用（阈值是拍脑袋的，等有更多真实视频再调）
   if(r.stats.seen<0.3){location.hash='#/fail/noperson';return}
@@ -109,12 +123,13 @@ const FAILS={
   many:['画面里不止一个人','分不清哪个是你。换一段只有你在爬的视频吧。',['等旁边的人走开再拍','别人挡住你的那几秒，曲子会断掉']],
   occluded:['好几次没看清你的手脚','手或脚被挡住太久，曲子会断断续续。',['机位别对着岩点的背面','别穿和墙一个颜色的衣服']],
   device:['这台设备跑不动识别','浏览器没法在这台设备上运行姿态识别。换个浏览器（比如手机自带的 Safari / Chrome）再试试。',['更新到最新版浏览器','关掉省电模式']],
+  stuck:['处理卡住了','这台设备处理这段视频时停住了。可以换一段短一点的视频，或者换个浏览器再试。',['视频剪到 20 秒以内','关掉其他 App 再试','iPhone 上用 Safari 打开']],
   model:['识别模型没下载下来','需要联网下载一次识别模型（约 9MB），之后视频还是只在你的手机上处理。',['检查网络后再试一次','换个网络（比如 Wi-Fi）']]};
 function showFail(why){
   const [t,m,tips]=FAILS[why]||FAILS.unreadable;
   $('failTitle').textContent=t;$('failMsg').textContent=m;
   $('failTips').replaceChildren(...tips.map(s=>{const li=document.createElement('li');li.textContent=s;return li}));
-  const has=!!userURL&&!['unreadable','model','device'].includes(why);$('failCard').hidden=!has;
+  const has=!!userURL&&!['unreadable','model','device','stuck'].includes(why);$('failCard').hidden=!has;
   if(has){$('failVid').src=userURL;$('failVid').currentTime=0.5}
 }
 

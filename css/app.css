@@ -137,4 +137,7 @@ button{-webkit-tap-highlight-color:transparent}
 .frame-card .fill::after{content:"";position:absolute;right:-10px;top:0;width:10px;height:10px;
   background:radial-gradient(circle,var(--ink) 2px,transparent 2.6px);animation:pulse 1s infinite}
 
+/* 诊断日志（地址加 ?debug=1 才显示） */
+.debug{margin:0;max-height:180px;overflow:auto;font:11px/1.5 ui-monospace,Menlo,monospace;color:var(--muted);background:var(--soft2);border-radius:12px;padding:8px 10px;white-space:pre-wrap}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

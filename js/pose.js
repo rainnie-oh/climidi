@@ -9,15 +9,24 @@ const Pose=(()=>{
   const FPS=30,STEP=2;                    // 每 2 帧识别一次（15fps），中间帧插值，手机上快一倍
   const BW=180,BH=320,BG_MAX=48;          // 空墙在 180×320 上算，最多抽 48 帧（手机内存）
   let lm=null;
+  // 诊断日志（?debug=1 时处理页会显示）：每一步的耗时和报错，手机上卡住时能看出卡在哪一步
+  const T0=performance.now(),logs=[];
+  function log(m){const line=((performance.now()-T0)/1000).toFixed(1)+'s '+m;logs.push(line);console.log('pose:',line);if(Pose.onLog)Pose.onLog(line)}
+  // 等一个 Promise，超时就报错（手机上任何一步都不能无声无息地卡住）
+  const within=(p,ms,err)=>Promise.race([p,new Promise((_,bad)=>setTimeout(()=>bad(new Error(err)),ms))]);
 
   async function load(){
     if(lm)return lm;
+    log('加载 MediaPipe 库');
     const vision=await import(`${LIB}/vision_bundle.mjs`);
+    log('加载 wasm');
     const files=await vision.FilesetResolver.forVisionTasks(`${LIB}/wasm`);
+    log('创建识别器（GPU）');
     const opt=d=>({baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:'VIDEO',numPoses:2,
       minPoseDetectionConfidence:0.3,minPosePresenceConfidence:0.3,minTrackingConfidence:0.3});
     try{lm=await vision.PoseLandmarker.createFromOptions(files,opt('GPU'))}
-    catch(e){lm=await vision.PoseLandmarker.createFromOptions(files,opt('CPU'))}   // 没有 WebGL 时退回 CPU
+    catch(e){log('GPU 不行，改用 CPU：'+e.message);lm=await vision.PoseLandmarker.createFromOptions(files,opt('CPU'))}   // 没有 WebGL 时退回 CPU
+    log('识别器就绪');
     return lm;
   }
   // 竖屏 9:16 的居中裁切（和播放页 object-fit:cover 一致），视频像素坐标
@@ -26,7 +35,8 @@ const Pose=(()=>{
     if(vw/vh>want){const sw=vh*want;return{sx:(vw-sw)/2,sy:0,sw,sh:vh}}
     const sh=vw/want;return{sx:0,sy:(vh-sh)/2,sw:vw,sh};
   }
-  const seek=(v,t)=>new Promise(r=>{v.addEventListener('seeked',r,{once:true});v.currentTime=t});
+  // 跳到 t。目标和当前位置一样时浏览器不发 seeked，直接返回；个别帧 seek 不回来也只等 3 秒
+  const seek=(v,t)=>Math.abs(v.currentTime-t)<1e-3?Promise.resolve():within(new Promise(r=>{v.addEventListener('seeked',r,{once:true});v.currentTime=t}),3000,'seek').catch(()=>log('seek 超时 '+t.toFixed(2)));
 
   // 主流程 = 扫描（逐帧识别，所有人都留着）+ 整理（选攀岩者、清洗、插值）。
   // onStage('model'|'scan'|'post')，onProgress(已识别帧, 总帧)；abort() 返回 true 就停
@@ -39,19 +49,31 @@ const Pose=(()=>{
   // 扫描。keep>0 时每 keep 帧另存一张 180×320 缩略帧（tools/extract_kp.js 用，线上不存）
   async function scan(url,{onStage=()=>{},onProgress=()=>{},abort=()=>false,keep=0}={}){
     onStage('model');
-    let det;try{det=await load()}catch(e){console.error('pose: 模型加载失败',e);throw new Error('model')}
-    const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';v.src=url;
-    await new Promise((ok,bad)=>{v.onloadeddata=ok;v.onerror=()=>bad(new Error('unreadable'))});
-    try{await v.play();v.pause()}catch(e){}   // iOS 上不先播一下不肯解码
+    let det;try{det=await within(load(),90000,'model timeout')}catch(e){log('模型加载失败：'+e.message);throw new Error('model')}
+    // iOS Safari 不会主动预加载视频：要先 play() 才开始加载/解码（不能先等 loadeddata 再 play，会一直等）。
+    // 视频挂在页面上（看不见），有些 Safari 版本对脱离页面的 video 不出画面帧
+    const v=document.createElement('video');v.muted=true;v.defaultMuted=true;v.playsInline=true;
+    v.setAttribute('muted','');v.setAttribute('playsinline','');v.preload='auto';
+    v.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none';
+    document.body.appendChild(v);
+    try{
+    const ready=new Promise((ok,bad)=>{v.addEventListener('loadeddata',ok,{once:true});v.onerror=()=>bad(new Error('unreadable'))});
+    v.src=url;v.load();
+    log('打开视频');
+    try{await within(v.play(),8000,'play');v.pause();log('视频可以播放')}catch(e){log('play() 没成功：'+e.message)}
+    if(v.readyState<2)await within(ready,20000,'unreadable');
+    log(`视频就绪 ${v.videoWidth}×${v.videoHeight} ${v.duration.toFixed(1)}s`);
     const vw=v.videoWidth,vh=v.videoHeight,crop=cropOf(vw,vh),dur=v.duration,N=Math.max(2,Math.round(dur*FPS));
     const bgEvery=Math.max(10,Math.ceil(N/BG_MAX/STEP)*STEP),bgFrames=[];
     const bc=document.createElement('canvas');bc.width=BW;bc.height=BH;const bg=bc.getContext('2d',{willReadFrequently:true});
     const raw=[],frames=new Map();   // raw 每个识别帧：{f, poses:[{p:[[x,y,vis]×8],cx,cy}]}
     onStage('scan');
+    log('开始逐帧识别，共 '+N+' 帧');
     for(let f=0;f<N;f+=STEP){
       if(abort())throw new Error('abort');
       await seek(v,Math.min(dur-0.001,(f+0.5)/FPS));
-      let res;try{res=det.detectForVideo(v,Math.round(f*1000/FPS)+1)}catch(e){console.error('pose: 识别失败',e);throw new Error('device')}
+      let res;try{res=det.detectForVideo(v,Math.round(f*1000/FPS)+1)}catch(e){log('识别失败：'+e.message);throw new Error('device')}
+      if(f===0)log('第一帧识别完成');
       raw.push({f,poses:(res.landmarks||[]).map(L=>{
         const p=IDX.map(k=>{const q=L[k];return[((q.x*vw)-crop.sx)/crop.sw,((q.y*vh)-crop.sy)/crop.sh,q.visibility==null?1:q.visibility]});
         const cx=p.reduce((a,q)=>a+q[0],0)/8,cy=p.reduce((a,q)=>a+q[1],0)/8;
@@ -62,7 +84,9 @@ const Pose=(()=>{
       onProgress(Math.min(N,f+STEP),N);
       if(f%20===0)await new Promise(r=>setTimeout(r,0));   // 让出主线程，进度条能动
     }
+    log('识别完成');
     return{raw,N,dur,crop,vw,vh,bg:median(bgFrames),frames};
+    }finally{v.remove()}
   }
   // 整理：扫描结果 → 每帧 8 点（30fps）+ 质量统计。只依赖 raw 和 N，参数改了可以离线重跑
   function finish({raw,N},o=CLEAN){
@@ -165,5 +189,5 @@ const Pose=(()=>{
     for(let i=0;i<img.data.length;i++){if(i%4===3){img.data[i]=255;continue}for(let k=0;k<n;k++)col[k]=frames[k][i];col.sort();img.data[i]=col[n>>1]}
     g.putImageData(img,0,0);return c;
   }
-  return{analyze,scan,finish,load,cropOf,CLEAN};   // scan/finish/CLEAN 给 tools/extract_kp.js、tools/report.js 用
+  return{analyze,scan,finish,load,cropOf,CLEAN,logs};   // scan/finish/CLEAN 给 tools/extract_kp.js、tools/report.js 用
 })();
