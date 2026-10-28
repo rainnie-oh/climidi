@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>过线配乐</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- Landing -->
+<section class="view home" id="v-home" hidden>
+  <!-- 静态封面（设计稿 cover_a），不出声 -->
+  <div class="cover">
+    <img class="art" src="media/cover.jpg" alt="封面：攀岩墙被画成像素画，所有岩点是彩色点阵，这条路线是紫色，一个匿名的黑色点阵小人正在攀爬，手和脚发声处有小方框">
+    <div class="cover-bar">
+      <canvas class="dclock" id="homeClock"></canvas>
+      <div class="dotbar" aria-hidden="true"><i class="track"></i><i class="fill" style="width:54%"></i></div>
+    </div>
+  </div>
+  <div class="hero">
+    <h1>听听看你的<br>BETA</h1>
+    <p>传一个你的抱石视频，接下来可以带上耳机啦🎧</p>
+  </div>
+  <div class="ctas">
+    <a class="btn primary" href="#/upload">上传视频</a>
+    <button class="btn ghost" type="button" disabled title="即将支持">拍一段</button>
+  </div>
+</section>
+
+<!-- 播放页；TOP 是这一页的一个状态（.is-top），不是单独的页面 -->
+<section class="view play" id="v-play" hidden>
+  <div class="stagebox">
+    <div class="stage" id="stage">
+      <!-- 声音全部来自 Web Audio，所以视频 muted；CSS 把它变成灰度 + 80% 纸白 -->
+      <video id="vid" muted playsinline preload="auto"></video>
+      <div class="wash"></div>
+      <canvas id="viz" aria-hidden="true"></canvas>
+      <canvas class="toptext" id="topText" role="img" aria-label="TOP"></canvas>
+      <div class="legend" aria-label="图例">
+        <span><i style="background:var(--lh)"></i>左手</span><span><i style="background:var(--rh)"></i>右手</span>
+        <span><i style="background:var(--lf)"></i>左脚</span><span><i style="background:var(--rf)"></i>右脚</span>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <canvas class="dclock" id="clock"></canvas>
+      <div class="dotbar seek" id="seek" role="slider" aria-label="进度" tabindex="0"><i class="track"></i><i class="fill" id="fill"></i></div>
+      <button class="round44" id="replay" type="button" aria-label="从头播放">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v4.5h4.5"/></svg>
+      </button>
+    </div>
+    <div class="row">
+      <button class="round56" id="play" type="button" aria-label="播放"><span class="ico"></span></button>
+      <div class="seg" role="group" aria-label="音色">
+        <button type="button" data-scale="maj" aria-pressed="true">五声</button>
+        <button type="button" data-scale="blues" aria-pressed="false">蓝调</button>
+      </div>
+      <a class="pill84" id="toShare" href="#/share">分享</a>
+    </div>
+  </div>
+</section>
+
+<!-- 分享页：值得分享的是“路线 + 难度 + 名字”；不放音色、BPM、换点次数 -->
+<section class="view share" id="v-share" hidden>
+  <a class="back" href="#/play">← 返回</a>
+  <div class="card">
+    <div class="map">
+      <canvas id="mapCv" aria-label="这一爬的路线：紫色点阵标出路线岩点，虚线点出身体的上升轨迹，攀岩者停在顶部" role="img"></canvas>
+      <div class="chip grade-chip"><canvas id="gradeCv"></canvas></div>
+      <div class="chip time-chip" aria-label="用时"><span>用时</span><canvas id="timeCv"></canvas></div>
+    </div>
+    <div class="meta">
+      <div class="title" id="shTitle">给这首曲子起个名</div>
+      <div class="sub"><span>过线配乐</span><span id="shDate"></span></div>
+    </div>
+  </div>
+  <div class="field">
+    <span class="lab" id="gradeLab">这条线多难</span>
+    <div class="grades" id="grades" role="radiogroup" aria-labelledby="gradeLab"></div>
+  </div>
+  <div class="field">
+    <label class="lab" for="title">给这首小曲起个名</label>
+    <input id="title" type="text" maxlength="16" placeholder="比如：周六的斜面" autocomplete="off">
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="saveVid" type="button">保存带配乐的视频</button>
+    <button class="btn ghost" id="shareBtn" type="button">分享</button>
+  </div>
+</section>
+
+<!-- 上传前：拍摄提示 + 从相册选（拍一段之后再做） -->
+<section class="view flow" id="v-upload" hidden>
+  <a class="back" href="#/">← 返回</a>
+  <div class="hero">
+    <h1>传之前<br>看一眼</h1>
+    <p>这几条做到了，曲子会更准。</p>
+  </div>
+  <ol class="tips">
+    <li><canvas data-dot="1"></canvas><div><b>手机放稳，别跟拍</b><span>固定机位，高度会直接变成音高，晃动会变成跑调</span></div></li>
+    <li><canvas data-dot="2"></canvas><div><b>全身入镜</b><span>从起步到 TOP，手和脚都在画面里</span></div></li>
+    <li><canvas data-dot="3"></canvas><div><b>别让别人挡住你</b><span>画面里最好只有你一个人在爬</span></div></li>
+    <li><canvas data-dot="4"></canvas><div><b>竖屏，60 秒以内</b><span>太长的视频先剪一下</span></div></li>
+  </ol>
+  <p class="note">视频只在你的手机上处理，不会上传。</p>
+  <div class="ctas">
+    <button class="btn primary" id="pick" type="button">从相册选择</button>
+  </div>
+  <input type="file" id="file" accept="video/*" hidden>
+</section>
+
+<!-- 处理中：逐帧识别姿态 -->
+<section class="view flow" id="v-process" hidden>
+  <div class="frame-card">
+    <video id="userVid" muted playsinline preload="auto"></video><div class="wash"></div>
+    <div class="cover-bar">
+      <canvas class="dclock" id="procCount"></canvas>
+      <div class="dotbar" aria-hidden="true"><i class="track"></i><i class="fill" id="procFill"></i></div>
+    </div>
+  </div>
+  <div class="hero">
+    <h1>正在听<br>你的这一爬</h1>
+    <p id="procMsg">逐帧找你的手和脚。视频只在你的手机上处理，不会上传；处理时别切走页面。</p>
+  </div>
+  <div class="ctas"><a class="btn ghost" href="#/upload" id="procCancel">取消</a></div>
+</section>
+
+<!-- 失败：说清楚原因 + 怎么重拍 -->
+<section class="view flow" id="v-fail" hidden>
+  <a class="back" href="#/upload">← 返回</a>
+  <div class="frame-card small" id="failCard">
+    <video id="failVid" muted playsinline preload="auto"></video><div class="wash"></div>
+  </div>
+  <div class="hero">
+    <h1 id="failTitle">没看到攀岩者</h1>
+    <p id="failMsg"></p>
+  </div>
+  <ul class="tips plain" id="failTips"></ul>
+  <div class="ctas">
+    <button class="btn primary" type="button" id="failRetry">换一段视频</button>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// 用户页不暴露参数：固定 V3 方案（用户试听认可的那套）、1/8 三连音、100 BPM、五个声部全开
+const UI={val:id=>({bpm:100,grid:'t'})[id],on:()=>true,text:()=>{}};
+</script>
+<script src="js/route.js"></script>
+<script src="js/dots.js"></script>
+<script src="js/silhouette.js"></script>
+<script src="js/pose.js"></script>
+<script src="js/app.js"></script>
+<!-- engine.js、viz.js、player.js 在识别完成后由 app.js 加载 -->
+</body>
+</html>

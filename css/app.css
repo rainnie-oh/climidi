@@ -1,0 +1,140 @@
+/* 过线配乐 · 用户页（方向 A「Dot Matrix」，DESIGN-SPEC §2）。移动端优先，基准 390×844。
+   UI 只有纸白/白/墨色；紫色只出现在可视化的路线岩点里。 */
+:root{
+  --paper:#F5F5F3; --card:#FFFFFF; --ink:#141418; --muted:#5E5E62; --placeholder:#8A8A8E;
+  --hair:rgba(20,20,24,.10); --soft:rgba(20,20,24,.08); --soft2:rgba(20,20,24,.07);
+  --lh:#4DA3FF; --rh:#FF5A4D; --lf:#3ECF8E; --rf:#FFB347;
+  --font:"Noto Sans SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --app-w:min(100vw,430px);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+body{min-height:100svh}
+button,input{font:inherit;color:inherit}
+button{-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.view{width:var(--app-w);margin:0 auto;min-height:100svh}
+.view[hidden]{display:none}
+
+/* ---- 共用：按钮、圆点进度条、圆点数字 ---- */
+.btn{display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;text-decoration:none;font-weight:500;cursor:pointer}
+.btn.primary{height:56px;background:var(--ink);color:var(--paper);font-size:16px}
+.btn.ghost{height:48px;background:transparent;color:var(--ink);font-size:15px;box-shadow:inset 0 0 0 1.5px var(--ink)}
+.dotbar{flex:1;position:relative;height:10px;min-width:0}
+.dotbar i{position:absolute;left:0;top:0;height:10px;display:block;
+  background-image:radial-gradient(circle,var(--ink) 2px,transparent 2.6px);background-size:10px 10px}
+.dotbar .track{right:0;opacity:.18}
+.dclock{display:block;flex:none}
+
+/* ---- Landing ---- */
+.home{padding:16px;display:flex;flex-direction:column;gap:20px}
+.cover{position:relative;width:100%;height:clamp(280px,calc(100svh - 404px),440px);border:1px solid #fff;
+  border-radius:32px;overflow:hidden;background:var(--paper);box-shadow:0 0 0 1px var(--hair);flex:none}
+/* 封面画面比卡片宽 32px（设计稿里 390 宽的画面放在 358 宽的卡里，左移 16、上移 80） */
+.cover .art{position:absolute;left:-16px;top:-80px;width:calc(100% + 32px);aspect-ratio:9/16;height:auto;display:block}
+.cover-bar{position:absolute;left:16px;right:16px;bottom:16px;display:flex;align-items:center;gap:14px;
+  background:var(--paper);border-radius:20px;padding:12px 16px;box-shadow:0 0 0 1px var(--hair)}
+.hero{display:flex;flex-direction:column;gap:8px;padding:0 4px}
+.hero h1{margin:0;font-size:36px;line-height:1.2;font-weight:700}
+.hero p{margin:0;font-size:15px;line-height:1.5;color:var(--muted)}
+.ctas{display:flex;flex-direction:column;gap:10px}
+
+/* ---- 播放页：上 9:16 可视化（390×693），下控制面板 ---- */
+.play{display:flex;flex-direction:column}
+.stagebox{display:flex;justify-content:center;flex:none}
+/* 屏幕矮时按高度收窄，保持 9:16，两边露纸白 */
+.stage{position:relative;overflow:hidden;aspect-ratio:9/16;height:min(calc(var(--app-w)*16/9),calc(100svh - 151px));background:var(--paper)}
+.stage video,.stage .wash,.stage #viz{position:absolute;inset:0;width:100%;height:100%}
+.stage video{object-fit:cover;filter:grayscale(1)}
+.stage .wash{background:rgba(245,245,243,.8)}
+/* 设计稿 390 宽画面里 left 23 / top 30 / 190×78，矮屏画面变窄时按比例缩 */
+.toptext{position:absolute;left:5.9%;top:4.33%;width:48.72%!important;height:auto!important;opacity:0;transform:scale(.92);transform-origin:left top;transition:opacity .25s,transform .35s cubic-bezier(.2,1.4,.4,1)}
+.is-top .toptext{opacity:1;transform:none}
+.legend{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:flex;gap:10px;white-space:nowrap;
+  background:rgba(245,245,243,.68);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:500;line-height:16px}
+.legend span{display:flex;align-items:center;gap:8px}
+.legend i{width:9px;height:9px;border-radius:50%;display:block}
+.panel{border-top:1px solid var(--hair);padding:16px;display:flex;flex-direction:column;gap:14px}
+.panel .row{display:flex;align-items:center;gap:12px}
+.panel .row+.row{gap:10px}
+.seek{cursor:pointer;touch-action:none}
+.seek::before{content:"";position:absolute;inset:-17px 0}   /* 触控区 ≥44px */
+.round44,.round56{flex:none;border:0;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.round44{width:44px;height:44px;background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.round56{width:56px;height:56px;background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink)}
+/* 暂停中：描边圈 + 墨色三角；播放中：实心黑 + 纸白双竖条 */
+.round56 .ico{display:block;width:0;height:0;margin-left:4px;border-left:16px solid var(--ink);border-top:10px solid transparent;border-bottom:10px solid transparent}
+.round56.on{background:var(--ink);box-shadow:none}
+.round56.on .ico{margin:0;width:15px;height:20px;border:0;background:linear-gradient(90deg,var(--paper) 0 5px,transparent 5px 10px,var(--paper) 10px 15px);border-radius:1px}
+.seg{flex:1;height:56px;padding:4px;border-radius:999px;background:var(--soft);display:flex;gap:4px;min-width:0}
+.seg button{flex:1;border:0;border-radius:999px;background:transparent;color:var(--ink);font-size:15px;font-weight:500;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.pill84{flex:none;width:84px;height:56px;border-radius:999px;box-shadow:inset 0 0 0 1.5px var(--ink);display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:500;color:var(--ink);text-decoration:none}
+/* TOP：Replay、分享 变实心黑 */
+.is-top .round44{background:var(--ink);color:var(--paper);box-shadow:none}
+.is-top .pill84{background:var(--ink);color:var(--paper);box-shadow:none}
+
+/* ---- 分享页 ---- */
+.share{padding:8px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.back{align-self:flex-start;display:flex;align-items:center;min-height:44px;padding:0 6px;font-size:14px;color:var(--muted);text-decoration:none}
+.card{background:var(--card);border-radius:28px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 0 1px var(--hair)}
+/* 路线图 334×410：9:16 的画面（334×594）上移 34 后裁出来；屏幕矮时变矮 */
+.map{position:relative;height:clamp(240px,calc(100svh - 434px),410px);border-radius:18px;overflow:hidden;background:var(--paper)}
+.map #mapCv{position:absolute;left:0;top:0;width:100%;aspect-ratio:9/16;transform:translateY(-5.72%)}   /* 34/594 */
+.chip{position:absolute;display:flex;align-items:center;gap:6px;background:var(--paper);border-radius:16px;padding:0 12px;box-shadow:0 0 0 1px var(--hair)}
+.chip canvas{display:block}
+.grade-chip{left:12px;top:12px;height:56px}
+/* 用时（从视频开始到 TOP），和 V 几同一个胶囊样式；放右下，避开 TOP 时在画面上方的攀岩者 */
+.time-chip{right:12px;bottom:12px;height:35px;border-radius:12px;padding:0 10px}
+.time-chip span{font-size:11px;font-weight:500;color:var(--muted)}
+.meta{display:flex;flex-direction:column;gap:2px;padding:0 4px}
+.meta .title{font-size:22px;line-height:1.3;font-weight:700;min-height:1.3em;overflow-wrap:anywhere}
+.meta .title.empty{color:var(--placeholder)}
+.meta .sub{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field .lab{font-size:12px;font-weight:500;color:var(--muted);padding-left:4px}
+.grades{display:flex;gap:8px;overflow-x:auto;padding:2px 4px;scrollbar-width:none}
+.grades::-webkit-scrollbar{display:none}
+.grades button{flex:none;width:44px;height:44px;border-radius:50%;border:0;padding:0;font-size:14px;font-weight:700;cursor:pointer;background:var(--soft2);color:var(--ink)}
+.grades button[aria-checked="true"]{background:var(--ink);color:var(--paper)}
+.field input{height:48px;border-radius:24px;border:0;background:var(--soft2);padding:0 18px;font-size:16px;color:var(--ink);outline:none}
+.field input::placeholder{color:var(--placeholder)}
+.field input:focus-visible{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.actions{display:flex;gap:10px;margin-top:auto}
+.actions .btn{height:52px;font-size:16px}
+.actions .primary{flex:1.5}
+.actions .ghost{flex:1}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);max-width:calc(var(--app-w) - 48px);
+  background:var(--ink);color:var(--paper);font-size:13px;padding:9px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---- 上传流程：提示 / 处理中 / 失败（同一套语言：纸白底、黑色圆点、圆角卡片） ---- */
+.btn:disabled{opacity:.32;cursor:not-allowed}
+.flow{padding:8px 16px 16px;display:flex;flex-direction:column;gap:20px}
+.flow .hero h1{font-size:30px}
+.flow .ctas{margin-top:auto}
+#v-process{padding-top:16px}
+.tips{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.tips li{display:flex;align-items:center;gap:14px;background:var(--card);border-radius:20px;padding:14px 16px;box-shadow:0 0 0 1px var(--hair)}
+.tips li canvas{flex:none}
+.tips li div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tips b{font-size:15px;font-weight:700}
+.tips span{font-size:12px;color:var(--muted);line-height:1.5}
+.tips.plain li{padding:12px 16px}
+.tips.plain li::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--ink)}
+.note{margin:0;font-size:12px;color:var(--muted);padding-left:4px}
+/* 用户视频的预览：和播放页同样的灰度 + 纸白处理 */
+.frame-card{position:relative;flex:none;height:clamp(240px,calc(100svh - 404px),440px);border:1px solid #fff;border-radius:32px;overflow:hidden;
+  background:var(--paper);box-shadow:0 0 0 1px var(--hair)}
+.frame-card.small{height:clamp(160px,calc(100svh - 560px),280px);border-radius:28px}
+.frame-card video,.frame-card .wash{position:absolute;inset:0;width:100%;height:100%}
+.frame-card video{object-fit:cover;filter:grayscale(1)}
+.frame-card .wash{background:rgba(245,245,243,.8)}
+/* 处理中：圆点在进度最前端呼吸 */
+@keyframes pulse{50%{opacity:.35}}
+.frame-card .fill::after{content:"";position:absolute;right:-10px;top:0;width:10px;height:10px;
+  background:radial-gradient(circle,var(--ink) 2px,transparent 2.6px);animation:pulse 1s infinite}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
