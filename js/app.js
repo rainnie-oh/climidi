@@ -58,6 +58,7 @@ const job={abort:false};
 // 诊断：地址加 ?debug=1，处理页显示每一步的耗时和报错（手机上卡住时截图给开发看）
 const DEBUG=/[?&]debug=1/.test(location.search);
 if(DEBUG){$('procLog').hidden=false;Pose.onLog=l=>{const el=$('procLog');el.textContent+=l+'\n';el.scrollTop=el.scrollHeight};
+  Pose.onLog('版本 '+window.BUILD+' · '+navigator.userAgent.replace(/^Mozilla\/5\.0 /,'').slice(0,90));
   window.addEventListener('error',e=>Pose.onLog('页面报错：'+e.message));window.addEventListener('unhandledrejection',e=>Pose.onLog('未处理的报错：'+(e.reason&&e.reason.message||e.reason)))}
 const MSG={model:'正在准备识别模型（约 9MB，第一次要下载一会儿）。',
   scan:'逐帧找你的手和脚。视频只在你的手机上处理，不会上传；处理时别切走页面。',
@@ -110,7 +111,7 @@ async function boot(data,url){
   window.CLIMB_DATA=data;                   // engine.js 读 CLIMB_DATA.kp；viz.js 读 .dots；silhouette.js 读 .bg/.crop
   if(url)$('vid').src=url;
   if(data.bg)Sil.setBg(data.bg,data.crop);
-  for(const s of ['js/engine.js','js/viz.js','js/player.js'])await loadScript(s);
+  for(const s of ['js/engine.js','js/viz.js','js/player.js'])await loadScript(s+'?v='+window.BUILD);
   A.booted=true;
 }
 

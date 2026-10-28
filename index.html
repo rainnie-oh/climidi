@@ -6,7 +6,7 @@
 <title>过线配乐</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/app.css?v=3">
 </head>
 <body>
 
@@ -148,14 +148,16 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
+// 发布版本号：每次发布改这里和下面各文件的 ?v=，手机浏览器才不会用旧缓存；诊断日志第一行会显示
+window.BUILD='3';
 // 用户页不暴露参数：固定 V3 方案（用户试听认可的那套）、1/8 三连音、100 BPM、五个声部全开
 const UI={val:id=>({bpm:100,grid:'t'})[id],on:()=>true,text:()=>{}};
 </script>
-<script src="js/route.js"></script>
-<script src="js/dots.js"></script>
-<script src="js/silhouette.js"></script>
-<script src="js/pose.js"></script>
-<script src="js/app.js"></script>
+<script src="js/route.js?v=3"></script>
+<script src="js/dots.js?v=3"></script>
+<script src="js/silhouette.js?v=3"></script>
+<script src="js/pose.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 <!-- engine.js、viz.js、player.js 在识别完成后由 app.js 加载 -->
 </body>
 </html>
