@@ -18,12 +18,29 @@ if(topT==null){
 const playV=$('v-play');
 Dots.render($('topText'),'TOP',190/17,INK);   // 190×78
 const atTop=t=>topT!=null&&t>=topT;
+/* ---- iPhone 静音键（M-01）----
+   Web Audio 默认走“环境音”会话，静音键一开就没声。iOS 17+ 直接把会话设成 playback；
+   老系统在同一次点击里播一段循环的静音 <audio>，会话就切到 playback。只改会话，不碰声音。 */
+let session=false;
+function playbackSession(){
+  if(session)return;session=true;
+  if(navigator.audioSession){try{navigator.audioSession.type='playback';return}catch(e){}}
+  const n=800,b=new Uint8Array(44+n),v=new DataView(b.buffer),str=(o,t)=>[...t].forEach((c,i)=>b[o+i]=c.charCodeAt(0));
+  str(0,'RIFF');v.setUint32(4,36+n,true);str(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,8000,true);v.setUint32(28,8000,true);v.setUint16(32,1,true);v.setUint16(34,8,true);str(36,'data');v.setUint32(40,n,true);b.fill(128,44);   // 0.1 秒 8 位静音
+  const a=new Audio(URL.createObjectURL(new Blob([b],{type:'audio/wav'})));a.loop=true;a.setAttribute('playsinline','');
+  a.play().catch(()=>{session=false});
+}
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+playV.classList.toggle('ios',isIOS);   // 只在 iPhone/iPad 上显示“检查静音键”
+// 开始播放（在点击里调）：会话 → 音频 → 视频
+function start(){playbackSession();initAudio();vid.play().catch(()=>{})}
 $('play').onclick=()=>{
   if(!vid.paused){vid.pause();hush();return}   // 暂停要连余音一起停
   if(vid.ended){hush();vid.currentTime=0}       // 播完再按：先切掉 TOP 的尾音，从头来
-  initAudio();vid.play().catch(()=>{});
+  start();
 };
-$('replay').onclick=()=>{hush();initAudio();vid.currentTime=0;vid.play().catch(()=>{})};   // 先切掉 TOP 的尾音再从头来
+$('replay').onclick=()=>{hush();vid.currentTime=0;start()};   // 先切掉 TOP 的尾音再从头来
 document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
   setScale(b.dataset.scale);
   document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
@@ -91,8 +108,8 @@ async function renderShare(){
 }
 window.addEventListener('resize',()=>{if(App.route==='share')renderShare()});
 
-$('saveVid').onclick=()=>App.toast('导出带配乐的视频还在做，下一版加上');
-// 分享：把预览卡画成一张 PNG，能系统分享就分享，不能就下载
+// 保存带配乐的视频在 js/export.js
+// 分享（M-08）：网站链接 + 预览卡 PNG（只有路线图，没有用户视频）。能系统分享就分享，不能就下载图片、复制链接
 async function cardPng(){
   const card=document.querySelector('.share .card'),map=$('mapCv');
   const w=card.clientWidth,h=card.clientHeight,s=3,c=document.createElement('canvas');c.width=w*s;c.height=h*s;
@@ -110,22 +127,24 @@ async function cardPng(){
   const [tx,ty,,th]=rel($('shTitle')),t=sh.title.trim();
   g.textBaseline='middle';g.fillStyle=t?INK:'#8A8A8E';g.font='700 22px "Noto Sans SC",system-ui,sans-serif';g.fillText(t||'给这首曲子起个名',tx,ty+th/2);
   const sub=document.querySelector('.meta .sub'),[sx,sy,sw,sh2]=rel(sub);
-  g.fillStyle='#5E5E62';g.font='400 12px "Noto Sans SC",system-ui,sans-serif';g.fillText('过线配乐',sx,sy+sh2/2);
+  g.fillStyle='#5E5E62';g.font='400 12px "Noto Sans SC",system-ui,sans-serif';g.fillText(sub.firstElementChild.textContent,sx,sy+sh2/2);
   g.textAlign='right';g.fillText(today,sx+sw,sy+sh2/2);
   return new Promise(r=>c.toBlob(r,'image/png'));
 }
 $('shareBtn').onclick=async()=>{
   let blob;try{blob=await cardPng()}catch(e){App.toast('这样打开的页面导不出图片，请用网页地址打开');return}   // file:// 下画布会被视频帧污染
-  const name=(sh.title.trim()||'过线配乐')+'.png',file=new File([blob],name,{type:'image/png'});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:sh.title.trim()||'过线配乐'})}catch(e){}return}
+  const name=(sh.title.trim()||'CLIMIDI')+'.png',file=new File([blob],name,{type:'image/png'});
+  const url=location.origin+location.pathname,text='爬音 CLIMIDI · 听听看你的 beta';
+  if(navigator.canShare&&navigator.canShare({files:[file],url})){try{await navigator.share({files:[file],url,text})}catch(e){}return}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  App.toast('已保存分享卡图片');
+  try{await navigator.clipboard.writeText(url);App.toast('已保存分享卡图片，网址已复制')}catch(e){App.toast('已保存分享卡图片')}
 };
 
 /* ---- 路由钩子：app.js 切页时调用 ---- */
+App.start=start;   // export.js 录视频时也从这里开始播
 App.onRoute=(next,prev)=>{
   // 从分享页返回保持原状（通常停在 TOP）；从别处进来停在开头，等用户点播放（iOS 声音要在点击里开）
-  if(next==='play'&&prev!=='share'&&prev!=='play'){vid.pause();vid.currentTime=0}
+  if(next==='play'&&prev!=='share'&&prev!=='play'){vid.pause();vid.currentTime=0.001}   // 设成 0 时 iOS 不出帧（本来就在 0），首帧会没有视频背景（M-02）
   if(next!=='play'){vid.pause();hush()}
   if(next==='share')renderShare();
 };

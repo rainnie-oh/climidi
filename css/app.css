@@ -1,4 +1,4 @@
-/* 过线配乐 · 用户页（方向 A「Dot Matrix」，DESIGN-SPEC §2）。移动端优先，基准 390×844。
+/* 爬音 CLIMIDI · 用户页（方向 A「Dot Matrix」，DESIGN-SPEC §2）。移动端优先，基准 390×844。
    UI 只有纸白/白/墨色；紫色只出现在可视化的路线岩点里。 */
 :root{
   --paper:#F5F5F3; --card:#FFFFFF; --ink:#141418; --muted:#5E5E62; --placeholder:#8A8A8E;
@@ -55,6 +55,19 @@ button{-webkit-tap-highlight-color:transparent}
   background:rgba(245,245,243,.68);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:500;line-height:16px}
 .legend span{display:flex;align-items:center;gap:8px}
 .legend i{width:9px;height:9px;border-radius:50%;display:block}
+/* 画面右上角的小胶囊：换一段视频（M-05）/ 录制中（M-07） */
+.stage-chip{position:absolute;right:12px;top:12px;display:flex;align-items:center;height:32px;padding:0 12px;border-radius:999px;
+  background:rgba(245,245,243,.86);box-shadow:0 0 0 1px var(--hair);font-size:12px;font-weight:500;color:var(--ink);text-decoration:none}
+.stage-chip::before{content:"";position:absolute;inset:-6px}   /* 触控区 ≥44px */
+.rec-chip{display:none;gap:6px}
+.rec-chip::after{content:"";order:-1;width:8px;height:8px;border-radius:50%;background:var(--rh);animation:pulse 1s infinite}
+.play.rec #restart{display:none}
+.play.rec .rec-chip{display:flex}
+.play.rec .panel{pointer-events:none;opacity:.4}
+/* 静音键提示只在 iPhone/iPad 上出现；多出的一行从画面高度里扣 */
+.hint{display:none;margin:-6px 0 0;font-size:11px;line-height:14px;color:var(--placeholder);text-align:center}
+.play.ios .hint{display:block}
+.play.ios .stage{height:min(calc(var(--app-w)*16/9),calc(100svh - 159px))}
 .panel{border-top:1px solid var(--hair);padding:16px;display:flex;flex-direction:column;gap:14px}
 .panel .row{display:flex;align-items:center;gap:12px}
 .panel .row+.row{gap:10px}

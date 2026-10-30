@@ -66,6 +66,7 @@ const Pose=(()=>{
     const vw=v.videoWidth,vh=v.videoHeight,crop=cropOf(vw,vh),dur=v.duration,N=Math.max(2,Math.round(dur*FPS));
     const bgEvery=Math.max(10,Math.ceil(N/BG_MAX/STEP)*STEP),bgFrames=[];
     const bc=document.createElement('canvas');bc.width=BW;bc.height=BH;const bg=bc.getContext('2d',{willReadFrequently:true});
+    const bgInfo=Pose.bgInfo={blank:0,rescued:0,used:0,luma:0};
     const raw=[],frames=new Map();   // raw 每个识别帧：{f, poses:[{p:[[x,y,vis]×8],cx,cy}]}
     onStage('scan');
     log('开始逐帧识别，共 '+N+' 帧');
@@ -79,12 +80,21 @@ const Pose=(()=>{
         const cx=p.reduce((a,q)=>a+q[0],0)/8,cy=p.reduce((a,q)=>a+q[1],0)/8;
         return{p,cx,cy};
       })});
-      if(f%bgEvery===0){bg.drawImage(v,crop.sx,crop.sy,crop.sw,crop.sh,0,0,BW,BH);bgFrames.push(bg.getImageData(0,0,BW,BH).data)}
+      if(f%bgEvery===0){
+        // 空墙抽帧。读到空白帧（全透明/全黑）说明这一刻视频帧还没解码出来（iOS 上 seeked 之后可能还没出帧）：
+        // 等下一个出帧回调（最多 0.3 秒）再读一次，还是空白就不要这一帧，免得空墙被拉成黑色（路线和轮廓都会坏）
+        const read=()=>{bg.clearRect(0,0,BW,BH);bg.drawImage(v,crop.sx,crop.sy,crop.sw,crop.sh,0,0,BW,BH);return bg.getImageData(0,0,BW,BH).data};
+        let d=read();
+        if(blank(d)){bgInfo.blank++;await within(new Promise(r=>v.requestVideoFrameCallback?v.requestVideoFrameCallback(r):setTimeout(r,100)),300,'rvfc').catch(()=>{});d=read();if(blank(d))d=null;else bgInfo.rescued++}
+        if(d){bgFrames.push(d);bgInfo.luma+=luma(d)}
+      }
       if(keep&&f%keep===0){const c=document.createElement('canvas');c.width=BW;c.height=BH;c.getContext('2d').drawImage(v,crop.sx,crop.sy,crop.sw,crop.sh,0,0,BW,BH);frames.set(f,c)}
       onProgress(Math.min(N,f+STEP),N);
       if(f%20===0)await new Promise(r=>setTimeout(r,0));   // 让出主线程，进度条能动
     }
     log('识别完成');
+    bgInfo.used=bgFrames.length;bgInfo.luma=bgFrames.length?Math.round(bgInfo.luma/bgFrames.length):0;
+    log(`空墙：抽 ${bgInfo.used+bgInfo.blank-bgInfo.rescued} 帧，读到空白 ${bgInfo.blank}（重读救回 ${bgInfo.rescued}），用 ${bgInfo.used} 帧，平均亮度 ${bgInfo.luma}`);
     return{raw,N,dur,crop,vw,vh,bg:median(bgFrames),frames};
     }finally{v.remove()}
   }
@@ -181,6 +191,9 @@ const Pose=(()=>{
     const got=S.filter(Boolean),hidden=got.filter(p=>[2,3,6,7].filter(k=>p[k][2]<0.35).length>=2).length;
     return{seen:got.length/S.length,hidden:got.length?hidden/got.length:1};
   }
+  // 抽帧质检：平均亮度（0..255）；全透明或几乎全黑算空白帧（没读到画面）
+  const luma=d=>{let s=0;for(let i=0;i<d.length;i+=16)s+=d[i]+d[i+1]+d[i+2];return s/(d.length/16)/3};
+  const blank=d=>{let a=0;for(let i=3;i<d.length;i+=16)a+=d[i];return a===0||luma(d)<4};
   // 逐像素逐通道中值 → 空墙（180×320 canvas）
   function median(frames){
     const c=document.createElement('canvas');c.width=BW;c.height=BH;

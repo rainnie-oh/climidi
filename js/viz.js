@@ -152,6 +152,20 @@ const Viz=(()=>{
       if(acc>=15){acc=0;circle(g,sm[t][0],sm[t][1],5.2,'#fff',235/255);circle(g,sm[t][0],sm[t][1],3.2,INK)}}
   }
 
+  // 诊断（地址加 ?debug=1）：左上角写出视频、空墙、路线、轮廓的状态，手机上截图就能看出哪一步没拿到像素
+  const DEBUG=/[?&]debug=1/.test(location.search);
+  function diag(g,css){
+    const b=typeof Pose!=='undefined'&&Pose.bgInfo,ref=typeof App!=='undefined'&&App.routeDots&&App.routeDots.ref;
+    const lines=['版本 '+window.BUILD,
+      `视频 rs=${vid.readyState} ${vid.paused?'暂停':'播放'} ${vid.videoWidth}×${vid.videoHeight}`,
+      b?`空墙 用${b.used}帧 空白${b.blank} 救回${b.rescued} 亮度${b.luma}`:'空墙 无记录',
+      '路线 '+(ref?`类${ref.cls} ${ref.votes}/${ref.of}票${ref.unsure?' 不确定':''}`:'没有投票')+' 紫点'+CLIMB_DATA.dots.length/2,
+      '轮廓 '+Sil.stat];
+    const s=css;g.font=`500 ${11*s}px ui-monospace,monospace`;g.textBaseline='top';g.textAlign='left';
+    g.fillStyle='rgba(255,255,255,.85)';g.fillRect(0,0,W,(lines.length*15+8)*s);
+    g.fillStyle=INK;lines.forEach((l,k)=>g.fillText(l,6*s,(4+15*k)*s));
+  }
+
   return{
     COL,NAME,GRAB,
     // 播放页叠加层：视频（灰度 + 纸白 80%）在下面，由 CSS 负责
@@ -160,6 +174,7 @@ const Viz=(()=>{
       blit(g,cv,'route',routeLayer);
       Sil.capture(vid,i);   // 读当前显示的视频帧做人形轮廓（按帧缓存）
       rings(g,i);body(g,i);trails(g,i);nodes(g,i,t,css);burst(g,t,css);
+      if(DEBUG)diag(g,css);
     },
     // 分享卡路线图：TOP 那一帧（灰度 + 80% 纸白，和播放页同一个底）+ 路线紫点 + 抓过的岩点 + 髋部虚线 + 停在 TOP 的剪影
     share(cv,t,frame){

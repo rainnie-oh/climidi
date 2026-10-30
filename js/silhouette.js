@@ -6,7 +6,7 @@ const Sil=(()=>{
   const SC=2,W=360/SC,H=640/SC,PAD=45/SC,THR=38;
   // 形态学核按尺度缩：闭运算 9×9 → 半径 4/SC；开运算 3×3 在半尺度下由缩图本身的平均代替（再开会吃掉手指这类细节）
   const K=[0.0708,0.2445,0.3694,0.2445,0.0708];   // OpenCV 5×5 高斯（sigma 1.1）
-  let bg=null,ok=true,crop=null;
+  let bg=null,ok=true,crop=null,stat='还没算';   // stat：最近一次的结果，?debug=1 时播放页显示
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const g=cv.getContext('2d',{willReadFrequently:true});
 
@@ -32,7 +32,7 @@ const Sil=(()=>{
   const cache=new Map();
   function capture(video,i){
     if(!ok||!bg||cache.has(i))return cache.get(i)||null;
-    if(!video||(video.readyState!==undefined&&(video.readyState<2||video.seeking)))return null;   // 视频正在跳转时画面还是旧帧；图片/画布直接用
+    if(!video||(video.readyState!==undefined&&(video.readyState<2||video.seeking))){stat='视频帧没就绪 rs='+(video&&video.readyState);return null}   // 视频正在跳转时画面还是旧帧；图片/画布直接用
     let x0=W,y0=H,x1=0,y1=0;
     for(const k of KP){const x=ser[k].x[i]*W,y=ser[k].y[i]*H;x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y)}
     x0=Math.max(0,Math.floor(x0-PAD));y0=Math.max(0,Math.floor(y0-PAD));x1=Math.min(W,Math.ceil(x1+PAD));y1=Math.min(H,Math.ceil(y1+PAD));
@@ -43,7 +43,7 @@ const Sil=(()=>{
     try{
       if(crop)g.drawImage(video,crop.sx,crop.sy,crop.sw,crop.sh,0,0,W,H);else g.drawImage(video,0,0,W,H);
       px=g.getImageData(rx,ry,rw,rh).data;
-    }catch(e){ok=false;return null}   // file:// 下会被拒
+    }catch(e){ok=false;stat='读不到像素：'+e.message;return null}   // file:// 下会被拒
     const f=blur(px,rw,rh,x0-rx,y0-ry,w,h);
     let m=new Uint8Array(w*h);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
@@ -53,11 +53,12 @@ const Sil=(()=>{
     const rc=Math.round(4/SC);
     m=Route.erode(Route.dilate(m,w,h,rc),w,h,rc);   // 闭运算（补洞）
     if(SC===1)m=Route.dilate(Route.erode(m,w,h,1),w,h,1);   // 开运算 3×3（去噪点）
+    let on=0;for(const q of m)on+=q;stat=`掩膜 ${Math.round(on/m.length*100)}%（ROI ${w}×${h}）`;   // 接近 100% 多半是空墙不对，接近 0 是读到的帧和空墙一样
     const r={x0,y0,w,h,m};
     cache.set(i,r);if(cache.size>12)cache.delete(cache.keys().next().value);
     return r;
   }
   // 按 360×640 坐标查询
   const at=(r,x,y)=>{x=Math.floor(x/SC)-r.x0;y=Math.floor(y/SC)-r.y0;return x>=0&&y>=0&&x<r.w&&y<r.h&&r.m[y*r.w+x]===1};
-  return{setBg,capture,get:i=>cache.get(i)||null,at,get ready(){return ok&&!!bg}};
+  return{setBg,capture,get:i=>cache.get(i)||null,at,get ready(){return ok&&!!bg},get stat(){return bg?stat:'没有空墙'}};
 })();

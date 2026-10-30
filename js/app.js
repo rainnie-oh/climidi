@@ -111,7 +111,7 @@ async function boot(data,url){
   window.CLIMB_DATA=data;                   // engine.js 读 CLIMB_DATA.kp；viz.js 读 .dots；silhouette.js 读 .bg/.crop
   if(url)$('vid').src=url;
   if(data.bg)Sil.setBg(data.bg,data.crop);
-  for(const s of ['js/engine.js','js/viz.js','js/player.js'])await loadScript(s+'?v='+window.BUILD);
+  for(const s of ['js/engine.js','js/viz.js','js/player.js','js/export.js'])await loadScript(s+'?v='+window.BUILD);
   A.booted=true;
 }
 
