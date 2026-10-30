@@ -61,7 +61,9 @@ button{-webkit-tap-highlight-color:transparent}
 .stage-chip::before{content:"";position:absolute;inset:-6px}   /* 触控区 ≥44px */
 .rec-chip{display:none;gap:6px}
 .rec-chip::after{content:"";order:-1;width:8px;height:8px;border-radius:50%;background:var(--rh);animation:pulse 1s infinite}
-.play.rec #restart{display:none}
+.save-chip{display:none;border:0;background:var(--ink);color:var(--paper);box-shadow:none;cursor:pointer}
+.play.rec #restart,.play.saved #restart{display:none}
+.play.saved .save-chip{display:flex}
 .play.rec .rec-chip{display:flex}
 .play.rec .panel{pointer-events:none;opacity:.4}
 /* 静音键提示只在 iPhone/iPad 上出现；多出的一行从画面高度里扣 */

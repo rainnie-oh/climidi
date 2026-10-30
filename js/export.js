@@ -1,13 +1,13 @@
 // 保存带配乐的视频（M-07）。player.js 之后加载。
 // 播放页画面（灰度 + 纸白底、可视化、TOP 字）加右下角圆点字水印 CLIMIDI，画到一张 720×1280 画布，
 // 和音频引擎的出口（S.gate）一起用 MediaRecorder 录。全程在本机，不上传。
-// 录完要用户再点一下才存：iOS 的系统分享只能在点击里调，录了几十秒之后那次点击已经失效。
+// 录完原地保存（M-11），不跳页：能直接下载的直接下载；iPhone 要走系统分享存相册，只能在点击里调（录了几十秒，那次点击早失效了），
+// 所以画面右上角原地出一个“存到相册”。
 (()=>{
 const W=720,H=1280,INK='#141418';
 const TYPES=['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm'];   // iOS Safari 只有 mp4
 const type=window.MediaRecorder&&TYPES.find(t=>MediaRecorder.isTypeSupported(t));
-const btn=$('saveVid'),label=btn.textContent,playV=$('v-play'),viz=$('viz'),topCv=$('topText');
-const isIOS=playV.classList.contains('ios');
+const btn=$('saveVid'),now=$('saveNow'),playV=$('v-play'),viz=$('viz'),topCv=$('topText');
 let rec=null,file=null;
 
 btn.onclick=()=>{
@@ -17,10 +17,12 @@ btn.onclick=()=>{
   record();
 };
 // 换了音色，录好的视频就不对了
-document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{file=null;btn.textContent=label}));
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{file=null;playV.classList.remove('saved')}));
+now.onclick=()=>{playV.classList.remove('saved');save()};
 
 function record(){
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
+  playV.classList.remove('saved');
   location.hash='#/play';                 // 在播放页录：用户看着它播，可视化照常由 player.js 画
   hush();vid.currentTime=0;App.start();   // 新建音频图（在这次点击里），从头播
   const dest=ac.createMediaStreamDestination(),gate=S.gate;gate.connect(dest);
@@ -35,9 +37,8 @@ function record(){
     if(!ok||!chunks.length){App.toast('录制中断了，再点一次重新录');return}
     const mime=type.split(';')[0];
     file=new File(chunks,'CLIMIDI-'+Date.now()+(mime==='video/mp4'?'.mp4':'.webm'),{type:mime});
-    btn.textContent=isIOS?'存到相册':'下载视频';
-    location.hash='#/share';
-    App.toast(isIOS?'录好了，点“存到相册”':'录好了，点“下载视频”');
+    if(canShare()){playV.classList.add('saved');App.toast('录好了，点右上角存到相册')}
+    else{download();App.toast('已保存')}
   };
   // 播完（pause 先于 ended 触发，这时 ended 已经是 true）留 0.3 秒尾音再停；中途被暂停 / 切走就作废
   const onPause=()=>{vid.removeEventListener('pause',onPause);ok=vid.ended;setTimeout(()=>rec&&rec.stop(),ok?300:0)};
@@ -63,11 +64,16 @@ function record(){
   })();
 }
 
+// 只有 iPhone/iPad 走系统分享（存相册）；电脑上直接下载
+const canShare=()=>playV.classList.contains('ios')&&!!(navigator.canShare&&navigator.canShare({files:[file]}));
 async function save(){
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
+  if(canShare()){
     try{await navigator.share({files:[file]})}catch(e){}   // iPhone：分享面板里选“存储视频”
     return;
   }
+  download();App.toast('已保存');
+}
+function download(){
   const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }

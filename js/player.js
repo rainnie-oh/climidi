@@ -34,9 +34,22 @@ function playbackSession(){
 const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 playV.classList.toggle('ios',isIOS);   // 只在 iPhone/iPad 上显示“检查静音键”
 // 开始播放（在点击里调）：会话 → 音频 → 视频
-function start(){playbackSession();initAudio();vid.play().catch(()=>{})}
+function start(){
+  priming=false;playbackSession();initAudio();App.playRes='等待';
+  vid.play().then(()=>App.playRes='ok',e=>App.playRes='拒绝 '+e.name+' '+e.message);   // ?debug=1 时显示
+}
+/* ---- 首帧（M-02 / M-10）----
+   iOS 不预加载视频帧（readyState 停在 1），播放页第一帧画不出视频背景。静音视频不用点击也能播：播一下、出帧了就停回开头。
+   不要在 readyState<2 时设 currentTime：iOS 上这个 seek 会一直挂着，之后点播放视频不走、声音卡在第一帧。 */
+let priming=false;
+function primeFrame(){
+  if(vid.readyState>=2)return;
+  priming=true;
+  vid.addEventListener('loadeddata',()=>{if(priming){priming=false;vid.pause();vid.currentTime=0}},{once:true});
+  vid.play().catch(()=>{priming=false});
+}
 $('play').onclick=()=>{
-  if(!vid.paused){vid.pause();hush();return}   // 暂停要连余音一起停
+  if(!vid.paused&&!priming){vid.pause();hush();return}   // 暂停要连余音一起停
   if(vid.ended){hush();vid.currentTime=0}       // 播完再按：先切掉 TOP 的尾音，从头来
   start();
 };
@@ -144,8 +157,8 @@ $('shareBtn').onclick=async()=>{
 App.start=start;   // export.js 录视频时也从这里开始播
 App.onRoute=(next,prev)=>{
   // 从分享页返回保持原状（通常停在 TOP）；从别处进来停在开头，等用户点播放（iOS 声音要在点击里开）
-  if(next==='play'&&prev!=='share'&&prev!=='play'){vid.pause();vid.currentTime=0.001}   // 设成 0 时 iOS 不出帧（本来就在 0），首帧会没有视频背景（M-02）
-  if(next!=='play'){vid.pause();hush()}
+  if(next==='play'&&prev!=='share'&&prev!=='play'){vid.pause();if(vid.readyState>=2)vid.currentTime=0;else primeFrame()}
+  if(next!=='play'){priming=false;vid.pause();hush()}
   if(next==='share')renderShare();
 };
 

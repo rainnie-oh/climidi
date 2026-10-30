@@ -160,7 +160,9 @@ const Viz=(()=>{
       `视频 rs=${vid.readyState} ${vid.paused?'暂停':'播放'} ${vid.videoWidth}×${vid.videoHeight}`,
       b?`空墙 用${b.used}帧 空白${b.blank} 救回${b.rescued} 亮度${b.luma}`:'空墙 无记录',
       '路线 '+(ref?`类${ref.cls} ${ref.votes}/${ref.of}票${ref.unsure?' 不确定':''}`:'没有投票')+' 紫点'+CLIMB_DATA.dots.length/2,
-      '轮廓 '+Sil.stat];
+      '轮廓 '+Sil.stat,
+      `播放 t=${vid.currentTime.toFixed(2)} seeking=${vid.seeking} err=${vid.error?vid.error.code:'无'}`,
+      `play()=${App.playRes||'没点'} 会话=${navigator.audioSession?navigator.audioSession.type:'不支持'}`];
     const s=css;g.font=`500 ${11*s}px ui-monospace,monospace`;g.textBaseline='top';g.textAlign='left';
     g.fillStyle='rgba(255,255,255,.85)';g.fillRect(0,0,W,(lines.length*15+8)*s);
     g.fillStyle=INK;lines.forEach((l,k)=>g.fillText(l,6*s,(4+15*k)*s));
