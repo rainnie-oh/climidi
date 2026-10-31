@@ -3,8 +3,9 @@
 // 同一遍扫描里顺便抽帧算“空墙”（逐像素中值），给路线岩点和人形轮廓用。
 const Pose=(()=>{
   const VER='0.10.14';
-  const LIB=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VER}`;
-  const MODEL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
+  // 库和模型放在自己的网站上（vendor/，约 28MB，手机按需下 19MB 左右）：谷歌存储和 jsdelivr 在部分流量网络下连不上
+  const LIB=new URL('vendor/mediapipe',location.href).href;
+  const MODEL=LIB+'/pose_landmarker_full.task';
   const IDX=[11,12,15,16,23,24,27,28];   // MediaPipe 33 点 → Ls Rs Lw Rw Lh Rh La Ra（左右都是攀岩者自己的左右，和 COCO 一致）
   const FPS=30,STEP=2;                    // 每 2 帧识别一次（15fps），中间帧插值，手机上快一倍
   const BW=180,BH=320,BG_MAX=48;          // 空墙在 180×320 上算，最多抽 48 帧（手机内存）

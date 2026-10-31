@@ -100,7 +100,7 @@ function routeDots(bg,kp){
   g.drawImage(bg,0,0,360,640);
   const G=Route.allGrabs(kp),f0=Math.max(0,kp.findIndex(r=>r[8]>=35&&r[11]>=35));
   const start=[2,3].map(j=>{const p=Route.track(kp,j)[f0];return{x:p[0],y:p[1]}});
-  const r=Route.routeMask(g.getImageData(0,0,360,640).data,G.Lw.concat(G.Rw,start));
+  const r=Route.routeMask(g.getImageData(0,0,360,640).data,G.Lw.concat(G.Rw,start,G.La.concat(G.Ra).map(s=>({...s,foot:true}))));
   routeDots.ref=r.ref;
   return Route.routeDots(r.mask);
 }

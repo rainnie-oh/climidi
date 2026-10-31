@@ -175,7 +175,10 @@ const Viz=(()=>{
       const {g,css}=fit(cv),i=fi(t);
       blit(g,cv,'route',routeLayer);
       Sil.capture(vid,i);   // 读当前显示的视频帧做人形轮廓（按帧缓存）
-      rings(g,i);body(g,i);trails(g,i);nodes(g,i,t,css);burst(g,t,css);
+      // 这一帧没认到攀岩者（还在走向岩壁、走出画面）就不画人，否则人形会停在第一次认到的位置，和视频里的人对不上
+      const row=CLIMB_DATA.kp[i],seen=row&&[2,5,8,11,14,17,20,23].some(k=>row[k]>=35);
+      if(seen){rings(g,i);body(g,i);trails(g,i);nodes(g,i,t,css)}
+      burst(g,t,css);
       if(DEBUG)diag(g,css);
     },
     // 分享卡路线图：TOP 那一帧（灰度 + 80% 纸白，和播放页同一个底）+ 路线紫点 + 抓过的岩点 + 髋部虚线 + 停在 TOP 的剪影

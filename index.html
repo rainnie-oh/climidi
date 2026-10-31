@@ -6,8 +6,9 @@
 <title>爬音 CLIMIDI · 听听看你的 beta</title>
 <meta name="description" content="听听看你的 beta：传一段攀岩视频，手和脚的动作变成一首小曲。视频只在你的手机上处理，不会上传。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=5">
+<!-- 字体不阻塞渲染：连不上谷歌时直接用系统字体，页面不用干等 -->
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/app.css?v=6">
 </head>
 <body>
 
@@ -154,15 +155,15 @@
 
 <script>
 // 发布版本号：每次发布改这里和下面各文件的 ?v=，手机浏览器才不会用旧缓存；诊断日志第一行会显示
-window.BUILD='5';
+window.BUILD='6';
 // 用户页不暴露参数：固定 V3 方案（用户试听认可的那套）、1/8 三连音、100 BPM、五个声部全开
 const UI={val:id=>({bpm:100,grid:'t'})[id],on:()=>true,text:()=>{}};
 </script>
-<script src="js/route.js?v=5"></script>
-<script src="js/dots.js?v=5"></script>
-<script src="js/silhouette.js?v=5"></script>
-<script src="js/pose.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/route.js?v=6"></script>
+<script src="js/dots.js?v=6"></script>
+<script src="js/silhouette.js?v=6"></script>
+<script src="js/pose.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 <!-- engine.js、viz.js、player.js 在识别完成后由 app.js 加载 -->
 </body>
 </html>
