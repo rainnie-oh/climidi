@@ -8,13 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <!-- 字体不阻塞渲染：连不上谷歌时直接用系统字体，页面不用干等 -->
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=9">
+<link rel="stylesheet" href="css/app.css?v=2.0">
 </head>
 <body>
 
 <!-- Landing -->
 <section class="view home" id="v-home" hidden>
-  <!-- 静态封面（设计稿 cover_a），不出声 -->
+  <!-- 静态封面，不出声 -->
   <div class="cover">
     <img class="art" src="media/cover.jpg" alt="封面：攀岩墙被画成像素画，所有岩点是彩色点阵，这条路线是紫色，一个匿名的黑色点阵小人正在攀爬，手和脚发声处有小方框">
     <div class="cover-bar">
@@ -30,6 +30,7 @@
     <a class="btn primary" href="#/upload">上传视频</a>
     <button class="btn ghost" type="button" disabled title="即将支持">拍一段</button>
   </div>
+  <p class="credit">Made by Rainnie🧗🏻‍♀️</p>
 </section>
 
 <!-- 播放页；TOP 是这一页的一个状态（.is-top），不是单独的页面 -->
@@ -109,7 +110,7 @@
     <li><canvas data-dot="1"></canvas><div><b>手机放稳，别跟拍</b><span>固定机位，高度会直接变成音高，晃动会变成跑调</span></div></li>
     <li><canvas data-dot="2"></canvas><div><b>全身入镜</b><span>从起步到 TOP，手和脚都在画面里</span></div></li>
     <li><canvas data-dot="3"></canvas><div><b>别让别人挡住你</b><span>画面里最好只有你一个人在爬</span></div></li>
-    <li><canvas data-dot="4"></canvas><div><b>竖屏，60 秒以内</b><span>太长的视频先剪一下</span></div></li>
+    <li><canvas data-dot="4"></canvas><div><b>竖屏高清，60 秒以内</b><span>用原片，压缩过的视频会认不准；太长的先剪一下</span></div></li>
   </ol>
   <p class="note">视频只在你的手机上处理，不会上传。</p>
   <div class="ctas">
@@ -155,15 +156,17 @@
 
 <script>
 // 发布版本号：每次发布改这里和下面各文件的 ?v=，手机浏览器才不会用旧缓存；诊断日志第一行会显示
-window.BUILD='9';
-// 用户页不暴露参数：固定 V3 方案（用户试听认可的那套）、1/8 三连音、100 BPM、五个声部全开
+window.BUILD='2.0';
+// 风格：默认拼贴；调试用 ?style=maj 切回点阵和五声/蓝调
+window.STYLE=/[?&]style=(maj|blues)/.test(location.search)?RegExp.$1:'collage';
+// 用户页不暴露参数：固定编曲方案、1/8 三连音、100 BPM、五个声部全开（拼贴风格的速度和网格在 acid.js 里按视频算）
 const UI={val:id=>({bpm:100,grid:'t'})[id],on:()=>true,text:()=>{}};
 </script>
-<script src="js/route.js?v=9"></script>
-<script src="js/dots.js?v=9"></script>
-<script src="js/silhouette.js?v=9"></script>
-<script src="js/pose.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/route.js?v=2.0"></script>
+<script src="js/dots.js?v=2.0"></script>
+<script src="js/silhouette.js?v=2.0"></script>
+<script src="js/pose.js?v=2.0"></script>
+<script src="js/app.js?v=2.0"></script>
 <!-- engine.js、viz.js、player.js 在识别完成后由 app.js 加载 -->
 </body>
 </html>

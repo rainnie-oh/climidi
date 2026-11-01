@@ -1,5 +1,5 @@
-// 抓点 + 路线岩点（DESIGN-SPEC §6）
-// 参考实现：design/tools/render2.py events()、holds2.py。坐标约定同参考：
+// 抓点 + 路线岩点
+// 坐标约定：
 //   抓点用 720×1280（可视化坐标），墙面分析用 360×640。
 const Route=(()=>{
   const W=720,H=1280,WW=360,WH=640;

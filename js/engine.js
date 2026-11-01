@@ -1,6 +1,6 @@
-// 音频引擎 + 信号处理 + 和声 + TOP：从 prototype/climb-template.html 原样搬出（HANDOFF §4）。
-// 唯一的改动是接口：读页面控件的地方换成 UI.val(id) / UI.on(id) / UI.text(id,s)，由页面提供 UI 对象。
-// 这是普通 <script>（不是模块），顶层 let/const 与 viz.js、lab.js 共享全局作用域。
+// 音频引擎 + 信号处理 + 和声 + TOP。
+// 参数通过 UI.val(id) / UI.on(id) / UI.text(id,s) 读写，由页面提供 UI 对象。
+// 这是普通 <script>（不是模块），顶层 let/const 与 viz.js 等共享全局作用域。
 const D=CLIMB_DATA.kp;   // 识别结果（js/pose.js → app.js），每帧 8 点 [x,y,conf]，30fps
 const FPS=30,N=D.length;
 const KP=['Ls','Rs','Lw','Rw','Lh','Rh','La','Ra'];
@@ -17,7 +17,6 @@ const PRESETS={v3:{hrel:'lead',frel:'indep',tsnap:'chord',rhy:'chord',glide:60},
 const DEF={map:'h',key:0,scale:'maj',preset:'v3',hrel:'lead',lead:'R',par:3,frel:'indep',harm:'hip',tsnap:'chord',rhy:'chord',
   gH:100,gT:100,gF:100,gA:100,glide:60,echo:18,oct:2,shift:0,up:25,hold:5,dens:50,topPct:80,topHold:0.8,leadS:2.5,topVol:100};
 const P=Object.assign({},DEF);
-// 原来写在 $('scale').onchange 里的那一行，原样提成函数，用户页和 /lab 共用
 function setScale(v){P.scale=v;PENT=SCALES[P.scale];buildSN();rebuild();ROOTS=P.scale==='blues'?[0,5,10]:[0,7,9]}
 function hook(k){
   if(k==='oct'||k==='shift')rebuild();

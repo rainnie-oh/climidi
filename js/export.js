@@ -1,7 +1,7 @@
-// 保存带配乐的视频（M-07）。player.js 之后加载。
+// 保存带配乐的视频。player.js 之后加载。
 // 播放页画面（灰度 + 纸白底、可视化、TOP 字）加右下角圆点字水印 CLIMIDI，画到一张 720×1280 画布，
 // 和音频引擎的出口（S.gate）一起用 MediaRecorder 录。全程在本机，不上传。
-// 录完原地保存（M-11），不跳页：能直接下载的直接下载；iPhone 要走系统分享存相册，只能在点击里调（录了几十秒，那次点击早失效了），
+// 录完原地保存，不跳页：能直接下载的直接下载；iPhone 要走系统分享存相册，只能在点击里调（录了几十秒，那次点击早失效了），
 // 所以画面右上角原地出一个“存到相册”。
 (()=>{
 const W=720,H=1280,INK='#141418';
@@ -9,6 +9,7 @@ const TYPES=['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp
 const type=window.MediaRecorder&&TYPES.find(t=>MediaRecorder.isTypeSupported(t));
 const btn=$('saveVid'),now=$('saveNow'),playV=$('v-play'),viz=$('viz'),topCv=$('topText');
 let rec=null,file=null;
+const collage=window.STYLE==='collage';
 
 btn.onclick=()=>{
   if(file)return save();
@@ -50,6 +51,17 @@ function record(){
     requestAnimationFrame(draw);
     const c=CLIMB_DATA.crop||{sx:0,sy:0,sw:vid.videoWidth,sh:vid.videoHeight};
     g.globalAlpha=1;g.globalCompositeOperation='source-over';g.fillStyle='#F5F5F3';g.fillRect(0,0,W,H);
+    if(collage){   // 拼贴的画布不透明，视频和底色都已经在上面
+      if(viz.width)g.drawImage(viz,0,0,W,H);
+      const a=+getComputedStyle(topCv).opacity;
+      if(a>0&&topCv.width){   // 和 CSS 一样：画面下方中央，贴在微斜的纸片上
+        const iw=W*.36,ih=iw*topCv.height/topCv.width,bw=W*.42,bh=ih+W*.044;
+        g.save();g.globalAlpha=a;g.translate(W/2,H*.96-bh/2);g.rotate(-2*Math.PI/180);
+        g.fillStyle='rgba(20,20,24,.35)';g.fillRect(-bw/2+5.5,-bh/2+7.4,bw,bh);g.fillStyle='#F2F1EC';g.fillRect(-bw/2,-bh/2,bw,bh);
+        g.drawImage(topCv,-iw/2,-ih/2,iw,ih);g.restore();
+      }
+      mark(g);return;
+    }
     if(vid.readyState>=2)g.drawImage(vid,c.sx,c.sy,c.sw,c.sh,0,0,W,H);
     // 和播放页 CSS 一样：灰度 + 80% 纸白
     g.globalCompositeOperation='saturation';g.fillStyle='#808080';g.fillRect(0,0,W,H);
@@ -57,11 +69,14 @@ function record(){
     if(viz.width)g.drawImage(viz,0,0,W,H);
     const a=+getComputedStyle(topCv).opacity;   // TOP 字跟着 CSS 淡入
     if(a>0&&topCv.width){g.globalAlpha=a;const w=W*.4872;g.drawImage(topCv,W*.059,H*.0433,w,w*topCv.height/topCv.width);g.globalAlpha=1}
-    // 水印：右下角圆点字，只写 CLIMIDI，不放网址
-    const p=4,x=W-28-Dots.cols('CLIMIDI')*p,y=H-28-7*p;
-    g.fillStyle='rgba(245,245,243,.72)';g.beginPath();g.roundRect(x-10,y-8,Dots.cols('CLIMIDI')*p+20,7*p+16,999);g.fill();
-    Dots.paint(g,'CLIMIDI',x,y,p,INK);
+    mark(g);
   })();
+}
+// 水印：右下角圆点字，只写 CLIMIDI，不放网址
+function mark(g){
+  const p=4,x=W-28-Dots.cols('CLIMIDI')*p,y=H-28-7*p;
+  g.fillStyle='rgba(245,245,243,.72)';g.beginPath();g.roundRect(x-10,y-8,Dots.cols('CLIMIDI')*p+20,7*p+16,999);g.fill();
+  Dots.paint(g,'CLIMIDI',x,y,p,INK);
 }
 
 // 只有 iPhone/iPad 走系统分享（存相册）；电脑上直接下载

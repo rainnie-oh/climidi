@@ -55,7 +55,7 @@ function takeFile(f){
 
 /* ---- 识别（js/pose.js） ---- */
 const job={abort:false};
-// 诊断：地址加 ?debug=1，处理页显示每一步的耗时和报错（手机上卡住时截图给开发看）
+// 诊断：地址加 ?debug=1，处理页显示每一步的耗时和报错（手机上卡住时截图排查）
 const DEBUG=/[?&]debug=1/.test(location.search);
 if(DEBUG){$('procLog').hidden=false;Pose.onLog=l=>{const el=$('procLog');el.textContent+=l+'\n';el.scrollTop=el.scrollHeight};
   Pose.onLog('版本 '+window.BUILD+' · '+navigator.userAgent.replace(/^Mozilla\/5\.0 /,'').slice(0,90));
@@ -87,7 +87,7 @@ async function run(dur){
   }
   clearInterval(dog);
   if(job.abort)return;
-  // 能不能用（阈值是拍脑袋的，等有更多真实视频再调）
+  // 能不能用
   if(r.stats.seen<0.3){location.hash='#/fail/noperson';return}
   if(r.stats.hidden>0.5){location.hash='#/fail/occluded';return}
   await boot({kp:r.kp,dots:routeDots(r.bg,r.kp),bg:r.bg,crop:r.crop,masks:r.masks,reach:r.reach},userURL);
@@ -113,7 +113,7 @@ async function boot(data,url){
   if(url)$('vid').src=url;
   if(data.bg)Sil.setBg(data.bg,data.crop);
   Sil.setMasks(data.masks);
-  for(const s of ['js/engine.js','js/viz.js','js/player.js','js/export.js'])await loadScript(s+'?v='+window.BUILD);
+  for(const s of ['js/engine.js','js/acid.js','js/viz.js','js/collage.js','js/player.js','js/export.js'])await loadScript(s+'?v='+window.BUILD);
   A.booted=true;
 }
 
@@ -149,7 +149,7 @@ async function unstash(){
   if(/^#\/process/.test(location.hash)){const f=await unstash();if(f){go();takeFile(f);return}location.replace('#/upload')}
   go();
 })();
-// 测试用：直接给数据启动播放页（tools/smoke_test.js、tools/report.js）
+// 测试用：直接给数据启动播放页
 window.__boot=boot;A.routeDots=routeDots;
 return A;
 })();

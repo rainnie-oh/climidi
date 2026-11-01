@@ -1,5 +1,4 @@
-// 点阵可视化（DESIGN-SPEC §4、§5、§7）。所有绘制都在 720×1280 的逻辑坐标里，按画布宽度缩放。
-// 参考实现：design/tools/holds2.py render()、render.py silhouette()。
+// 点阵可视化。所有绘制都在 720×1280 的逻辑坐标里，按画布宽度缩放。
 // 读引擎的全局量（ser、EV、P、handNotes、chordTones、nearest、footMidiK、nname、topT、vid），只读不写。
 const Viz=(()=>{
   const W=720,H=1280,C=8,GW=90,GH=160;
@@ -22,7 +21,7 @@ const Viz=(()=>{
   const circle=(g,x,y,r,fill,a=1)=>{g.globalAlpha=a;g.fillStyle=fill;g.beginPath();g.arc(x,y,r,0,7);g.fill();g.globalAlpha=1};
   const ring=(g,x,y,r,lw,stroke,a=1)=>{g.globalAlpha=a;g.strokeStyle=stroke;g.lineWidth=lw;g.beginPath();g.arc(x,y,r,0,7);g.stroke();g.globalAlpha=1};
 
-  /* ---- 人（design/SILHOUETTE.md）：out = (真实轮廓 ∩ 骨架外扩 13px) ∪ 骨架线段 → 90×160 覆盖率 ----
+  /* ---- 人：out = (真实轮廓 ∩ 骨架外扩 13px) ∪ 骨架线段 → 90×160 覆盖率 ----
      真实轮廓来自 silhouette.js（帧 − 空墙）；拿不到时只用骨架线段。每格 4×4 采样，正好对上 360×640 掩膜的像素。 */
   const NEAR=13;   // 外扩半径（720 坐标）。想更饱满可到 18，别超过 20（=40px 核），会糊
   function segD(px,py,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy,u=l?Math.max(0,Math.min(1,((px-a[0])*dx+(py-a[1])*dy)/l)):0;return Math.hypot(px-a[0]-u*dx,py-a[1]-u*dy)}
@@ -185,7 +184,7 @@ const Viz=(()=>{
   }
 
   return{
-    COL,NAME,GRAB,
+    COL,NAME,GRAB,diag,
     // 播放页叠加层：视频（灰度 + 纸白 80%）在下面，由 CSS 负责
     player(cv,t){
       const {g,css}=fit(cv),i=fi(t);

@@ -4,14 +4,14 @@
 const INK='#141418';
 const cropOf=()=>CLIMB_DATA.crop||{sx:0,sy:0,sw:vid.videoWidth,sh:vid.videoHeight};   // 视频里 9:16 的裁切
 
-/* ---- TOP 兜底（HANDOFF §5 P2）----
+/* ---- TOP 兜底 ----
    引擎的自动检测要两手都在最高处停稳 0.8 秒；手伸出画面顶端时识别不到手，就没有 TOP。
    这时取“手最后一次在高处（手范围最高 30%）且看得清”的时刻；连这个也没有就用视频末尾。只决定何时收束，声音不变。 */
 if(topT==null){
   const th=R.hand[0]+0.7*(R.hand[1]-R.hand[0]);let f=-1;
   for(let i=0;i<N;i++)if((ser.Lw.c[i]>=0.35&&ser.Lw.h[i]>=th)||(ser.Rw.c[i]>=0.35&&ser.Rw.h[i]>=th))f=i;
   topT=f>=0?(f+1)/FPS:(N-1)/FPS;
-  window.__topFallback=true;   // tools/report.js 用来区分“自动检测到”和“兜底”
+  window.__topFallback=true;   // 测试脚本用来区分“自动检测到”和“兜底”
 }
 /* 模型中途跟丢、后面没有手的数据时，TOP 会判早。人形还在继续往上（比判定时的手还高）就取它到达最高处的时刻 */
 {
@@ -23,10 +23,11 @@ if(topT==null){
 }
 
 /* ---- 播放页 ---- */
-const playV=$('v-play');
+const playV=$('v-play'),collage=window.STYLE==='collage';
+playV.classList.toggle('collage',collage);
 Dots.render($('topText'),'TOP',190/17,INK);   // 190×78
 const atTop=t=>topT!=null&&t>=topT;
-/* ---- iPhone 静音键（M-01）----
+/* ---- iPhone 静音键 ----
    Web Audio 默认走“环境音”会话，静音键一开就没声。iOS 17+ 直接把会话设成 playback；
    老系统在同一次点击里播一段循环的静音 <audio>，会话就切到 playback。只改会话，不碰声音。 */
 let session=false;
@@ -46,7 +47,7 @@ function start(){
   want=true;playbackSession();initAudio();App.playRes='等待';
   vid.play().then(()=>App.playRes='ok',e=>App.playRes='拒绝 '+e.name+' '+e.message);   // ?debug=1 时显示
 }
-/* ---- 首帧（M-02 / M-10）----
+/* ---- 首帧 ----
    iOS 不预加载视频帧（readyState 停在 1），播放页第一帧画不出视频背景。静音视频不用点击也能播：播一下、出帧了就停回开头。
    不要在 readyState<2 时设 currentTime：iOS 上这个 seek 会一直挂着，之后点播放视频不走、声音卡在第一帧。
    want=用户要播。只要不是用户要播，视频一动就停回开头，否则会无声地自己播下去，第一次点播放反而变成暂停。 */
@@ -64,6 +65,7 @@ document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
   setScale(b.dataset.scale);
   document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
 });
+if(window.STYLE==='blues')document.querySelector('.seg button[data-scale="blues"]').click();   // 调试：?style=blues
 // 进度条：0 → TOP 时刻（到 TOP 时走满）；点/拖跳转
 const span=()=>topT!=null?topT:(vid.duration||N/FPS);
 function seekAt(e){const r=$('seek').getBoundingClientRect();vid.currentTime=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*span()}
@@ -76,7 +78,7 @@ window.addEventListener('keydown',e=>{if(App.route==='play'&&e.code==='Space'&&!
 function drawPlay(t){
   const top=atTop(t);
   playV.classList.toggle('is-top',top);
-  Viz.player($('viz'),t);
+  if(collage)Collage.draw($('viz'),t);else Viz.player($('viz'),t);
   Dots.render($('clock'),top?Dots.clock(topT,true):Dots.clock(t),4,INK);
   App.fillTo($('fill'),top?1:t/span());
   $('seek').setAttribute('aria-valuetext',Dots.clock(t));
@@ -124,7 +126,7 @@ async function renderShare(){
 window.addEventListener('resize',()=>{if(App.route==='share')renderShare()});
 
 // 保存带配乐的视频在 js/export.js
-// 分享（M-08）：网站链接 + 预览卡 PNG（只有路线图，没有用户视频）。能系统分享就分享，不能就下载图片、复制链接
+// 分享：网站链接 + 预览卡 PNG（只有路线图，没有用户视频）。能系统分享就分享，不能就下载图片、复制链接
 async function cardPng(){
   const card=document.querySelector('.share .card'),map=$('mapCv');
   const w=card.clientWidth,h=card.clientHeight,s=3,c=document.createElement('canvas');c.width=w*s;c.height=h*s;
@@ -164,7 +166,7 @@ App.onRoute=(next,prev)=>{
   if(next==='share')renderShare();
 };
 
-/* ---- 驱动：和原型的 frame() 一样，引擎跟着视频时钟走 ---- */
+/* ---- 驱动：引擎跟着视频时钟走 ---- */
 function frame(){
   requestAnimationFrame(frame);
   const t=vid.currentTime||0;

@@ -1,12 +1,12 @@
-// 姿态识别（HANDOFF P0-2）：在用户手机上用 MediaPipe Pose Landmarker 逐帧找人，视频不离开设备。
-// 输出和原来离线管线（tools/make_data.py）同一格式：每帧 8 个点 [x,y,conf]，x,y 归一化到 0..1000，conf×100，30fps。
+// 姿态识别：在用户手机上用 MediaPipe Pose Landmarker 逐帧找人，视频不离开设备。
+// 输出格式：每帧 8 个点 [x,y,conf]，x,y 归一化到 0..1000，conf×100，30fps。
 // 逐帧识别前先抽帧算“空墙”（排除人的逐像素中值），给路线岩点、去掉蒙版里的岩点和过滤认错的姿态用。
 const Pose=(()=>{
   const VER='0.10.14';
   // 库和模型放在自己的网站上（vendor/，约 28MB，手机按需下 19MB 左右）：谷歌存储和 jsdelivr 在部分流量网络下连不上
   const LIB=new URL('vendor/mediapipe',location.href).href;
   const MODEL=LIB+'/pose_landmarker_full.task';
-  const IDX=[11,12,15,16,23,24,27,28];   // MediaPipe 33 点 → Ls Rs Lw Rw Lh Rh La Ra（左右都是攀岩者自己的左右，和 COCO 一致）
+  const IDX=[11,12,15,16,23,24,27,28];   // MediaPipe 33 点 → Ls Rs Lw Rw Lh Rh La Ra（左右都是攀岩者自己的左右）
   const FPS=30,STEP=2;                    // 每 2 帧识别一次（15fps），中间帧插值，手机上快一倍
   const BW=180,BH=320,BG_MAX=48;          // 空墙在 180×320 上算，最多抽 48 帧（手机内存）
   // 识别配置（tools 可以覆盖后对比）。pad：识别前四周加灰边，模型要看到“身体还能往外延伸”才认得出画面边缘的半个人；maxSide：识别画布长边，决定读蒙版的耗时
@@ -54,7 +54,7 @@ const Pose=(()=>{
     files.wasmBinaryPath=URL.createObjectURL(wasm);
     const buf=new Uint8Array(await model.arrayBuffer());
     log('创建识别器（GPU）');
-    // numPoses 必须是 1：大于 1 时跟踪器每帧都重跑人体检测，关键点窗口每帧变，关节会抽搐（5 段测试视频上全身突变 92 次 → 5 次，抖动减半）
+    // numPoses 必须是 1：大于 1 时跟踪器每帧都重跑人体检测，关键点窗口每帧变，关节会抽搐
     const opt=d=>({baseOptions:{modelAssetBuffer:buf,delegate:d},runningMode:'VIDEO',numPoses:1,outputSegmentationMasks:true,
       // 门限放低：人爬到画面边缘只露半边时也不跟丢。放低后会认出假人，由 ghostFilter 用空墙对比去掉
       minPoseDetectionConfidence:CFG.det,minPosePresenceConfidence:CFG.pres,minTrackingConfidence:CFG.track});
@@ -148,7 +148,7 @@ const Pose=(()=>{
     for(let y=0;y<BH;y++)for(let x=0;x<BW;x++){const k=y*BW+x;if(bits[k>>3]>>(k&7)&1){area++;b.x0=Math.min(b.x0,x);b.x1=Math.max(b.x1,x);b.y0=Math.min(b.y0,y);b.y1=Math.max(b.y1,y)}}
     return{box:b,area};
   };
-  // 扫描。keep>0 时每 keep 帧另存一张 180×320 缩略帧（tools/extract_kp.js 用，线上不存）
+  // 扫描。keep>0 时每 keep 帧另存一张 180×320 缩略帧（测试脚本用，线上不存）
   async function scan(url,{onStage=()=>{},onProgress=()=>{},abort=()=>false,keep=0}={}){
     onStage('model');
     let det;try{det=await load()}catch(e){log('模型加载失败：'+e.message);throw new Error('model')}
@@ -304,8 +304,7 @@ const Pose=(()=>{
   const PAIRS=[[0,1],[2,3],[4,5],[6,7]];
   const dist=(a,b)=>Math.hypot(a[0]-b[0],(a[1]-b[1])*16/9);   // 归一化坐标，按 9:16 换成等比距离
   // 中值窗半宽（识别次数）、参与中值的最低可见度、窗内至少几个、可见度增益。
-  // MediaPipe 的 visibility 比 YOLO 的置信度系统性偏低（找到人时位置通常是准的），×2.5 后再交给音频侧的 0.35 门限；
-  // 在 4 段测试视频上通用（samples/report/summary.md 第 2 轮），不是为某一段调的
+  // MediaPipe 的 visibility 系统性偏低（找到人时位置通常是准的），×2.5 后再交给音频侧的 0.35 门限
   const CLEAN={half:2,minVis:0.1,minN:3,visGain:2.5,ghostEv:0.35,ghostMp:0.5};
   function clean(raw,pick,o=CLEAN){
     const n=raw.length,S=new Array(n).fill(null);
@@ -394,5 +393,5 @@ const Pose=(()=>{
     }
     g.putImageData(img,0,0);return{canvas:c,known};
   }
-  return{analyze,scan,finish,load,cropOf,CLEAN,CFG,logs};   // scan/finish/CLEAN 给 tools/extract_kp.js、tools/report.js 用
+  return{analyze,scan,finish,load,cropOf,CLEAN,CFG,logs};   // scan/finish/CLEAN 也给测试脚本用
 })();
