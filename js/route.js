@@ -143,6 +143,25 @@ const Route=(()=>{
     for(let p=0;p<n;p++)out[p]=out[p]?0:1;
     return{mask:dilate(out,w,h,1),ref,kept};
   }
+  // 整面墙的点阵（分享卡，和封面同一种画法）：空墙按 8px 一格取平均色，和墙不一样的格子画成带颜色的圆点，其余是淡淡的底点。
+  // 不用判断哪些是路线，所以不怕认错。空墙不变，只算一次。px 是 360×640 的 RGBA
+  function wallDots(px){
+    const w=WW,h=WH,C=4,out=[];
+    const all=[];for(let i=0;i<w*h;i+=7){const c=lab(px[i*4],px[i*4+1],px[i*4+2]);all.push(c)}
+    const m=k=>{const t=all.map(c=>c[k]).sort((a,b)=>a-b);return t[t.length>>1]},wall=[m(0),m(1),m(2)];
+    const wallC=Math.hypot(wall[1],wall[2]);
+    for(let gy=0;gy<160;gy++)for(let gx=0;gx<90;gx++){
+      let r=0,g=0,b=0;for(let y=0;y<C;y++)for(let x=0;x<C;x++){const i=((gy*C+y)*w+gx*C+x)*4;r+=px[i];g+=px[i+1];b+=px[i+2]}
+      r/=16;g/=16;b/=16;
+      const c=lab(r,g,b),sc=c[0]/wall[0],cx=gx*8+4,cy=gy*8+4;
+      const hold=Math.hypot(c[0]-wall[0],c[1]-wall[1],c[2]-wall[2])>DE&&!(c[0]>=25&&Math.hypot(c[1]-wall[1]*sc,c[2]-wall[2]*sc)<Math.max(5,wallC*0.3));
+      if(!hold){out.push({x:cx,y:cy,r:1.1,col:'#C9C9C6'});continue}
+      // 提高饱和度：缩小后的颜色偏灰，点阵上要鲜明一些；不够彩的就是黑、灰、白
+      const avg=(r+g+b)/3,k=Math.hypot(c[1],c[2])<8?1:1.5,cl=v=>Math.max(0,Math.min(255,Math.round(avg+(v-avg)*k)));
+      out.push({x:cx,y:cy,r:3.4,col:`rgb(${cl(r)},${cl(g)},${cl(b)})`});
+    }
+    return out;
+  }
   // 掩膜 → 720×1280 上的紫色点阵位置（间距 7，先在 720 尺度上腐蚀 3×3）
   function routeDots(mask){
     const at=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&mask[(y>>1)*WW+(x>>1)];
@@ -153,5 +172,5 @@ const Route=(()=>{
     }
     return dots;
   }
-  return{grabs,allGrabs,track,routeMask,routeDots,dilate,erode,W,H};
+  return{grabs,allGrabs,track,routeMask,routeDots,wallDots,dilate,erode,W,H};
 })();

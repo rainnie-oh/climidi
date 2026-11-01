@@ -103,16 +103,12 @@ function syncShare(){
 // 路线图停在 TOP 那一帧（没有 TOP 就用最后一帧）；只在进入和尺寸变化时重画
 const shareT=()=>topT!=null?topT:(N-1)/FPS;
 // 底图：TOP 那一帧，灰度 + 80% 纸白（和播放页一样）。用 saturation 合成去色，不读像素，Safari 也能用
-let shareBg=null,shareBgT=null;
-function grabFrame(t){
+let shareT0=null;
+function seekFrame(t){   // 跳到这一帧，算出它的人形轮廓，再跳回去
   return new Promise(res=>{
     const back=vid.currentTime,done=()=>{
-      const c=document.createElement('canvas');c.width=720;c.height=1280;const g=c.getContext('2d');
       Sil.capture(vid,Math.min(N-1,Math.floor(t*FPS)));   // 顺便算 TOP 那一帧的人形轮廓
-      const c0=cropOf();g.drawImage(vid,c0.sx,c0.sy,c0.sw,c0.sh,0,0,720,1280);
-      g.globalCompositeOperation='saturation';g.fillStyle='#808080';g.fillRect(0,0,720,1280);
-      g.globalCompositeOperation='source-over';g.fillStyle='rgba(245,245,243,.8)';g.fillRect(0,0,720,1280);
-      vid.currentTime=back;res(c);
+      vid.currentTime=back;res();
     };
     if(Math.abs(vid.currentTime-t)<0.02&&vid.readyState>=2){done();return}
     const seek=()=>{vid.addEventListener('seeked',done,{once:true});vid.currentTime=t};
@@ -122,8 +118,8 @@ function grabFrame(t){
 async function renderShare(){
   syncShare();
   const t=shareT();
-  if(shareBgT!==t){shareBg=await grabFrame(t);shareBgT=t}
-  requestAnimationFrame(()=>Viz.share($('mapCv'),t,shareBg));
+  if(shareT0!==t){await seekFrame(t);shareT0=t}
+  requestAnimationFrame(()=>Viz.share($('mapCv'),t));
 }
 window.addEventListener('resize',()=>{if(App.route==='share')renderShare()});
 

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <!-- 字体不阻塞渲染：连不上谷歌时直接用系统字体，页面不用干等 -->
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=8">
+<link rel="stylesheet" href="css/app.css?v=9">
 </head>
 <body>
 
@@ -75,7 +75,7 @@
   <a class="back" href="#/play">← 返回</a>
   <div class="card">
     <div class="map">
-      <canvas id="mapCv" aria-label="这一爬的路线：紫色点阵标出路线岩点，虚线点出身体的上升轨迹，攀岩者停在顶部" role="img"></canvas>
+      <canvas id="mapCv" aria-label="这一爬的路线：点阵画出整面墙的岩点，圆圈标出抓过的岩点，虚线点出身体的上升轨迹，攀岩者停在顶部" role="img"></canvas>
       <div class="chip grade-chip"><canvas id="gradeCv"></canvas></div>
       <div class="chip time-chip" aria-label="用时"><span>用时</span><canvas id="timeCv"></canvas></div>
     </div>
@@ -155,15 +155,15 @@
 
 <script>
 // 发布版本号：每次发布改这里和下面各文件的 ?v=，手机浏览器才不会用旧缓存；诊断日志第一行会显示
-window.BUILD='8';
+window.BUILD='9';
 // 用户页不暴露参数：固定 V3 方案（用户试听认可的那套）、1/8 三连音、100 BPM、五个声部全开
 const UI={val:id=>({bpm:100,grid:'t'})[id],on:()=>true,text:()=>{}};
 </script>
-<script src="js/route.js?v=8"></script>
-<script src="js/dots.js?v=8"></script>
-<script src="js/silhouette.js?v=8"></script>
-<script src="js/pose.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/route.js?v=9"></script>
+<script src="js/dots.js?v=9"></script>
+<script src="js/silhouette.js?v=9"></script>
+<script src="js/pose.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
 <!-- engine.js、viz.js、player.js 在识别完成后由 app.js 加载 -->
 </body>
 </html>

@@ -86,6 +86,11 @@ const Viz=(()=>{
     const g=c.getContext('2d');g.setTransform(w/W,0,0,w/W,0,0);draw(g);return cache[k]=c;
   }
   const routeLayer=g=>{const d=CLIMB_DATA.dots;g.fillStyle=ROUTE;for(let k=0;k<d.length;k+=2){g.beginPath();g.arc(d[k],d[k+1],2.7,0,7);g.fill()}};
+  // 分享卡的墙：整面墙的点阵（Route.wallDots），和封面同一种画法
+  const wallLayer=g=>{
+    const c=document.createElement('canvas');c.width=360;c.height=640;const cg=c.getContext('2d');cg.drawImage(CLIMB_DATA.bg,0,0,360,640);
+    for(const d of Route.wallDots(cg.getImageData(0,0,360,640).data)){g.fillStyle=d.col;g.beginPath();g.arc(d.x,d.y,d.r,0,7);g.fill()}
+  };
   const blit=(g,cv,name,draw)=>{g.save();g.setTransform(1,0,0,1,0,0);g.drawImage(layer(name,cv.width,draw),0,0);g.restore()};
 
   /* ---- 抓过的岩点：白圈 + 肢体色圈，越爬越多 ---- */
@@ -193,12 +198,11 @@ const Viz=(()=>{
       burst(g,t,css);
       if(DEBUG)diag(g,css);
     },
-    // 分享卡路线图：TOP 那一帧（灰度 + 80% 纸白，和播放页同一个底）+ 路线紫点 + 抓过的岩点 + 髋部虚线 + 停在 TOP 的剪影
-    share(cv,t,frame){
+    // 分享卡路线图：整面墙的点阵（不用视频画面，路人不会被分享出去）+ 抓过的岩点 + 髋部虚线 + 停在 TOP 的剪影
+    share(cv,t){
       const {g}=fit(cv),i=fi(t);
       g.fillStyle=PAPER;g.fillRect(0,0,W,H);
-      if(frame)g.drawImage(frame,0,0,W,H);
-      blit(g,cv,'route',routeLayer);
+      blit(g,cv,'wall',wallLayer);
       rings(g,i);hipPath(g,i);body(g,i,150/255,225/255);
     }
   };

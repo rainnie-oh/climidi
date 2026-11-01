@@ -51,7 +51,7 @@ function record(){
     const c=CLIMB_DATA.crop||{sx:0,sy:0,sw:vid.videoWidth,sh:vid.videoHeight};
     g.globalAlpha=1;g.globalCompositeOperation='source-over';g.fillStyle='#F5F5F3';g.fillRect(0,0,W,H);
     if(vid.readyState>=2)g.drawImage(vid,c.sx,c.sy,c.sw,c.sh,0,0,W,H);
-    // 和播放页 CSS 一样：灰度 + 80% 纸白（同 player.js 的 grabFrame）
+    // 和播放页 CSS 一样：灰度 + 80% 纸白
     g.globalCompositeOperation='saturation';g.fillStyle='#808080';g.fillRect(0,0,W,H);
     g.globalCompositeOperation='source-over';g.fillStyle='rgba(245,245,243,.8)';g.fillRect(0,0,W,H);
     if(viz.width)g.drawImage(viz,0,0,W,H);
