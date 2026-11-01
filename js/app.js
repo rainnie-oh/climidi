@@ -60,7 +60,7 @@ const DEBUG=/[?&]debug=1/.test(location.search);
 if(DEBUG){$('procLog').hidden=false;Pose.onLog=l=>{const el=$('procLog');el.textContent+=l+'\n';el.scrollTop=el.scrollHeight};
   Pose.onLog('版本 '+window.BUILD+' · '+navigator.userAgent.replace(/^Mozilla\/5\.0 /,'').slice(0,90));
   window.addEventListener('error',e=>Pose.onLog('页面报错：'+e.message));window.addEventListener('unhandledrejection',e=>Pose.onLog('未处理的报错：'+(e.reason&&e.reason.message||e.reason)))}
-const MSG={model:'正在准备识别模型（约 9MB，第一次要下载一会儿）。',
+const MSG={model:'第一次要下载识别模型（约 19MB），之后就不用了。',
   scan:'逐帧找你的手和脚。视频只在你的手机上处理，不会上传；处理时别切走页面。',
   post:'快好了，在找你抓过的岩点。'};
 async function run(dur){
@@ -70,9 +70,10 @@ async function run(dur){
   const total=Math.max(2,Math.round(dur*30));
   const count=n=>Dots.render($('procCount'),String(n).padStart(String(total).length,'0')+'/'+total,4,INK);
   count(0);fillTo($('procFill'),0);
-  // 看门狗：逐帧识别阶段 40 秒没有任何进展就停（模型下载阶段 pose.js 自己有 90 秒超时）
+  // 看门狗：逐帧识别阶段 40 秒没有任何进展就停（模型下载阶段 pose.js 自己判断：30 秒没收到数据才算失败）
   let last=Date.now(),stage='model',stuck=false;
   const dog=setInterval(()=>{if(stage==='scan'&&Date.now()-last>40000){stuck=true;job.abort=true}},2000);
+  Pose.onDownload=(mb,tot)=>{$('procMsg').textContent=`第一次要下载识别模型：${mb.toFixed(1)} / ${tot.toFixed(0)} MB。之后就不用了。`};
   let r;
   try{
     r=await Pose.analyze(userURL,{abort:()=>job.abort,
@@ -89,7 +90,7 @@ async function run(dur){
   // 能不能用（阈值是拍脑袋的，等有更多真实视频再调）
   if(r.stats.seen<0.3){location.hash='#/fail/noperson';return}
   if(r.stats.hidden>0.5){location.hash='#/fail/occluded';return}
-  await boot({kp:r.kp,dots:routeDots(r.bg,r.kp),bg:r.bg,crop:r.crop},userURL);
+  await boot({kp:r.kp,dots:routeDots(r.bg,r.kp),bg:r.bg,crop:r.crop,masks:r.masks,reach:r.reach},userURL);
   location.hash='#/play';
 }
 
@@ -111,6 +112,7 @@ async function boot(data,url){
   window.CLIMB_DATA=data;                   // engine.js 读 CLIMB_DATA.kp；viz.js 读 .dots；silhouette.js 读 .bg/.crop
   if(url)$('vid').src=url;
   if(data.bg)Sil.setBg(data.bg,data.crop);
+  Sil.setMasks(data.masks);
   for(const s of ['js/engine.js','js/viz.js','js/player.js','js/export.js'])await loadScript(s+'?v='+window.BUILD);
   A.booted=true;
 }
@@ -125,7 +127,7 @@ const FAILS={
   occluded:['好几次没看清你的手脚','手或脚被挡住太久，曲子会断断续续。',['机位别对着岩点的背面','别穿和墙一个颜色的衣服']],
   device:['这台设备跑不动识别','浏览器没法在这台设备上运行姿态识别。换个浏览器（比如手机自带的 Safari / Chrome）再试试。',['更新到最新版浏览器','关掉省电模式']],
   stuck:['处理卡住了','这台设备处理这段视频时停住了。可以换一段短一点的视频，或者换个浏览器再试。',['视频剪到 20 秒以内','关掉其他 App 再试','iPhone 上用 Safari 打开']],
-  model:['识别模型没下载下来','需要联网下载一次识别模型（约 9MB），之后视频还是只在你的手机上处理。',['检查网络后再试一次','换个网络（比如 Wi-Fi）']]};
+  model:['识别模型没下载下来','需要联网下载一次识别模型（约 19MB），之后视频还是只在你的手机上处理。',['检查网络后再试一次','换个网络（比如 Wi-Fi）']]};
 function showFail(why){
   const [t,m,tips]=FAILS[why]||FAILS.unreadable;
   $('failTitle').textContent=t;$('failMsg').textContent=m;

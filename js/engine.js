@@ -198,9 +198,10 @@ function swell(ms,t,len,att,v){
 /* ---------- TOP: build-up, then come home ---------- */
 const HOLD=2.8;   // seconds the resolved hold lasts before the voices walk back to the climber
 function detectTop(){
-  const th=R.hand[0]+(P.topPct/100)*(R.hand[1]-R.hand[0]),need=Math.round(P.topHold*FPS);let run=0;
-  for(let i=0;i<N;i++){run=Math.min(ser.Lw.h[i],ser.Rw.h[i])>=th&&ser.Lw.c[i]>=0.35&&ser.Rw.c[i]>=0.35?run+1:0;if(run>=need)return (i+1)/FPS}
-  return null;
+  const th=R.hand[0]+(P.topPct/100)*(R.hand[1]-R.hand[0]),need=Math.round(P.topHold*FPS);let run=0,top=null;
+  // 取最后一段停稳（TOP 是爬完才到的）：路线中段两手也可能短暂停在高处，关键点稳了之后这种情况也会达标
+  for(let i=0;i<N;i++){run=Math.min(ser.Lw.h[i],ser.Rw.h[i])>=th&&ser.Lw.c[i]>=0.35&&ser.Rw.c[i]>=0.35?run+1:0;if(run===need)top=(i+1)/FPS}
+  return top==null?null:Math.min(top,(N-1)/FPS-P.topHold);   // 视频在停稳后马上结束时提前到手到位的时刻，给收束留出时间
 }
 let topT=null,topAuto=true;
 function showTop(){UI.text('topv',topT==null?'没有检测到 TOP。可以手动标记。':`TOP 在 ${topT.toFixed(1)} s（${topAuto?`自动检测：两手都在最高 ${100-P.topPct}% 的位置停稳 ${P.topHold.toFixed(1)} 秒`:'手动标记'}）`)}

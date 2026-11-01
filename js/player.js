@@ -13,6 +13,14 @@ if(topT==null){
   topT=f>=0?(f+1)/FPS:(N-1)/FPS;
   window.__topFallback=true;   // tools/report.js 用来区分“自动检测到”和“兜底”
 }
+/* 模型中途跟丢、后面没有手的数据时，TOP 会判早。人形还在继续往上（比判定时的手还高）就取它到达最高处的时刻 */
+{
+  const reach=(CLIMB_DATA.reach||[]).filter(r=>r.t>topT),f=Math.min(N-1,Math.floor(topT*FPS));
+  if(reach.length){
+    const peak=Math.min(...reach.map(r=>r.y)),hand=Math.min(ser.Lw.y[f],ser.Rw.y[f]);
+    if(peak<hand-0.03){topT=Math.min(reach.find(r=>r.y<=peak+0.02).t,(N-1)/FPS-P.topHold);window.__topFromReach=true}
+  }
+}
 
 /* ---- 播放页 ---- */
 const playV=$('v-play');
@@ -35,21 +43,19 @@ const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='M
 playV.classList.toggle('ios',isIOS);   // 只在 iPhone/iPad 上显示“检查静音键”
 // 开始播放（在点击里调）：会话 → 音频 → 视频
 function start(){
-  priming=false;playbackSession();initAudio();App.playRes='等待';
+  want=true;playbackSession();initAudio();App.playRes='等待';
   vid.play().then(()=>App.playRes='ok',e=>App.playRes='拒绝 '+e.name+' '+e.message);   // ?debug=1 时显示
 }
 /* ---- 首帧（M-02 / M-10）----
    iOS 不预加载视频帧（readyState 停在 1），播放页第一帧画不出视频背景。静音视频不用点击也能播：播一下、出帧了就停回开头。
-   不要在 readyState<2 时设 currentTime：iOS 上这个 seek 会一直挂着，之后点播放视频不走、声音卡在第一帧。 */
-let priming=false;
-function primeFrame(){
-  if(vid.readyState>=2)return;
-  priming=true;
-  vid.addEventListener('loadeddata',()=>{if(priming){priming=false;vid.pause();vid.currentTime=0}},{once:true});
-  vid.play().catch(()=>{priming=false});
-}
+   不要在 readyState<2 时设 currentTime：iOS 上这个 seek 会一直挂着，之后点播放视频不走、声音卡在第一帧。
+   want=用户要播。只要不是用户要播，视频一动就停回开头，否则会无声地自己播下去，第一次点播放反而变成暂停。 */
+let want=false;
+const hold=()=>{if(want||vid.paused||vid.readyState<2)return;vid.pause();vid.currentTime=0};
+for(const e of ['loadeddata','playing','timeupdate'])vid.addEventListener(e,hold);
+function primeFrame(){if(vid.readyState<2)vid.play().catch(()=>{})}
 $('play').onclick=()=>{
-  if(!vid.paused&&!priming){vid.pause();hush();return}   // 暂停要连余音一起停
+  if(!vid.paused&&want){want=false;vid.pause();hush();return}   // 暂停要连余音一起停
   if(vid.ended){hush();vid.currentTime=0}       // 播完再按：先切掉 TOP 的尾音，从头来
   start();
 };
@@ -157,8 +163,8 @@ $('shareBtn').onclick=async()=>{
 App.start=start;   // export.js 录视频时也从这里开始播
 App.onRoute=(next,prev)=>{
   // 从分享页返回保持原状（通常停在 TOP）；从别处进来停在开头，等用户点播放（iOS 声音要在点击里开）
-  if(next==='play'&&prev!=='share'&&prev!=='play'){vid.pause();if(vid.readyState>=2)vid.currentTime=0;else primeFrame()}
-  if(next!=='play'){priming=false;vid.pause();hush()}
+  if(next==='play'&&prev!=='share'&&prev!=='play'){want=false;vid.pause();if(vid.readyState>=2)vid.currentTime=0;else primeFrame()}
+  if(next!=='play'){want=false;vid.pause();hush()}
   if(next==='share')renderShare();
 };
 

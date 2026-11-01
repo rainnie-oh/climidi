@@ -1,5 +1,5 @@
-// 人形轮廓：视频帧 − 空墙（design/SILHOUETTE.md；参考 design/tools/silhouette_test.py mask_for()）。
-// 只在关键点包围盒 ±45px（360×640 坐标）里算，同时挡住旁人。结果交给 viz.js 和骨架线段合成。
+// 人形轮廓：优先用识别时存下的人体分割蒙版（js/pose.js）；没有蒙版时退回“视频帧 − 空墙”（design/SILHOUETTE.md；参考 design/tools/silhouette_test.py mask_for()）。
+// 帧 − 空墙只在关键点包围盒 ±45px（360×640 坐标）里算，同时挡住旁人。结果交给 viz.js 和骨架线段合成。
 // 为了手机上跑得动，按文档建议在 180×320 上算（SC=2），掩膜按 360×640 坐标查询；SC=1 就是参考实现的原尺寸。
 // 读不到视频像素（双击 file:// 打开时画布会被污染）就返回 null，viz.js 退回只用骨架线段。
 const Sil=(()=>{
@@ -28,10 +28,29 @@ const Sil=(()=>{
     const cv2=document.createElement('canvas');cv2.width=W;cv2.height=H;const cg=cv2.getContext('2d');cg.drawImage(src,0,0,W,H);
     bg=blur(cg.getImageData(0,0,W,H).data,W,H,0,0,W,H);
   }
+  // 分割蒙版：每 2 帧一张（和识别同步）的 W×H 1 位图。展开成人所在范围的掩膜，seg 标记告诉 viz.js 这是可信的真实轮廓
+  let masks=null;
+  function fromMask(i){
+    const d=i>>1;let b=null;
+    for(const e of [0,-1,1,-2,2]){b=masks[d+e];if(b)break}   // 个别帧没认到人，借最近的（2 次识别以内）
+    if(!b)return null;
+    let x0=W,y0=H,x1=-1,y1=-1;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){const k=y*W+x;if(b[k>>3]>>(k&7)&1){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}}
+    if(x1<0)return null;
+    const w=x1-x0+1,h=y1-y0+1,m=new Uint8Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const k=(y0+y)*W+x0+x;m[y*w+x]=b[k>>3]>>(k&7)&1}
+    return{x0,y0,w,h,m,seg:true};
+  }
   // 当前帧 i 的人形掩膜（工作尺度里的 ROI）；按帧缓存
   const cache=new Map();
   function capture(video,i){
-    if(!ok||!bg||cache.has(i))return cache.get(i)||null;
+    if(cache.has(i))return cache.get(i);
+    if(masks){
+      const r=fromMask(i);stat=r?`分割蒙版 ${r.w}×${r.h}`:'这一帧没有蒙版';
+      if(r){cache.set(i,r);if(cache.size>12)cache.delete(cache.keys().next().value)}
+      return r;
+    }
+    if(!ok||!bg)return null;
     if(!video||(video.readyState!==undefined&&(video.readyState<2||video.seeking))){stat='视频帧没就绪 rs='+(video&&video.readyState);return null}   // 视频正在跳转时画面还是旧帧；图片/画布直接用
     let x0=W,y0=H,x1=0,y1=0;
     for(const k of KP){const x=ser[k].x[i]*W,y=ser[k].y[i]*H;x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y)}
@@ -60,5 +79,7 @@ const Sil=(()=>{
   }
   // 按 360×640 坐标查询
   const at=(r,x,y)=>{x=Math.floor(x/SC)-r.x0;y=Math.floor(y/SC)-r.y0;return x>=0&&y>=0&&x<r.w&&y<r.h&&r.m[y*r.w+x]===1};
-  return{setBg,capture,get:i=>cache.get(i)||null,at,get ready(){return ok&&!!bg},get stat(){return bg?stat:'没有空墙'}};
+  // 一张有效蒙版都没有（比如读取失败）就保持“帧 − 空墙”
+  const setMasks=a=>{masks=a&&a.some(Boolean)?a:null;cache.clear()};
+  return{setBg,setMasks,capture,get:i=>cache.get(i)||null,at,get hasMasks(){return !!masks},get ready(){return masks?true:ok&&!!bg},get stat(){return masks||bg?stat:'没有空墙'}};
 })();

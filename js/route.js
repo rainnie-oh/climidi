@@ -41,17 +41,6 @@ const Route=(()=>{
     return o;
   }
   const dilate=(m,w,h,r)=>morph(m,w,h,r,true),erode=(m,w,h,r)=>morph(m,w,h,r,false);
-  function label(m,w,h){   // 8 连通
-    const lab=new Int32Array(m.length),st=[null];let n=0;const q=[];
-    for(let i=0;i<m.length;i++){
-      if(!m[i]||lab[i])continue;
-      n++;let area=0,sx=0,sy=0;q.length=0;q.push(i);lab[i]=n;
-      while(q.length){const p=q.pop(),x=p%w,y=(p/w)|0;area++;sx+=x;sy+=y;
-        for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=w||Y>=h)continue;const k=Y*w+X;if(m[k]&&!lab[k]){lab[k]=n;q.push(k)}}}
-      st.push({area,cx:sx/area,cy:sy/area});
-    }
-    return{lab,st,n};
-  }
   // sRGB → CIE Lab（D65，L 0..100）
   function lab(r,g,b){
     const lin=v=>{v/=255;return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4)};
@@ -60,80 +49,97 @@ const Route=(()=>{
     const f=t=>t>0.008856?Math.cbrt(t):7.787*t+16/116;
     return[Y>0.008856?116*Math.cbrt(Y)-16:903.3*Y,500*(f(X)-f(Y)),200*(f(Y)-f(Z))];
   }
-  // 路线岩点 = 和“人抓过的岩点”同色的岩点（按颜色，不限深色）：
-  // 1 墙面色 = 空墙的颜色中值；和墙差得多（ΔE>18）的像素才可能是岩点（木墙本身偏橘，所以不能只看饱和度）
-  // 2 像素分类：彩色按色相 12 档（每档 30°），不够彩的分成“深”（黑/深灰）和“浅”（白/浅灰）
-  // 3 每个抓点（加起步时两手的位置）周围 14px 看岩点像素是哪一类，各投一票；票最多的类就是这条线的颜色
-  // 4 参考色相 = 各抓点自己的主色相取中值（红和橘挨得近，不能把两种票平均成一个中间色）
-  // 5 全墙找同类连通块。彩色线：同色就算路线，volume 和碎块都留（只防整面墙：单块 <25% 画面），色相放宽以包住 volume 的受光面和背光面。
-  //   深/浅色线容易混进阴影和墙边：太大（>2500px）、太长太空的不算，但抓点碰到的块保留（<6% 画面）
-  // 6 获胜颜色票数不到 60% 就算“颜色不确定”，不画路线（宁可不画也别画错；以后让用户点一个岩点选颜色，DESIGN-SPEC §6 P1）
-  const CHROMA=18,DE=18,HUE_TOL=25,MAX_AREA=2500,MIN_SHARE=0.6;
+  // 路线岩点按“一颗颗岩点”来判，同时看两件事：手脚碰过（接触）+ 颜色相同。
+  // 1 分块：和墙差得多（ΔE>18）又不是阴影的像素，按颜色相近连成一块块岩点。亮度可以差得多（同一颗岩点有高光和背光），色度要接近（挨着的两颗不同色岩点不能连成一块）
+  // 2 接触：每个抓点找它碰到的那一块，一块最多算 2 次（手在一颗岩点上反复调整不算多票），手的分量是脚的两倍（脚常踩在墙上或别的点上）
+  // 3 定颜色：被碰过的岩点里，颜色相近的一组分量最大，就是这条线的颜色。占比太低或没有明显领先第二名就算“颜色不确定”，不画（宁可不画也别画错）
+  // 4 路线 = 这组被碰过的岩点 + 全墙和它同色的岩点。碰过但颜色不同的不画（路过别的点、踩墙边）；结束点不一定碰过，只靠颜色也能选上。不够彩的岩点没碰过时要形状像岩点（防黑色大岩点、墙边和地垫）
+  const DE=18,BLOB_DE=14,SAME=14,TOUCH_R=16,MIN_AREA=30,MAX_AREA=2500,MIN_SHARE=0.4,LEAD=1.3;
+  // 两种颜色的距离。亮度受光照影响大，彩色主要比色度；黑、灰、白本来就靠亮度区分，亮度权重高一些。
+  // 暗处的色度会被压缩（暗紫和深蓝的 a、b 都很小），先按亮度折算成相对饱和度再比，最多放大 2 倍免得黑色的噪声被放大
+  function colorDist(p,q){
+    const sa=50/Math.max(p[0],25),sb=50/Math.max(q[0],25),ca=Math.hypot(p[1],p[2]),cb=Math.hypot(q[1],q[2]),kL=ca<6&&cb<6?1.5:ca<10&&cb<10?0.7:0.35;
+    return Math.hypot(p[1]*sa-q[1]*sb,p[2]*sa-q[2]*sb,kL*(p[0]-q[0]));
+  }
   function routeMask(px,samples){
     const w=WW,h=WH,n=w*h,L=new Float32Array(n),A=new Float32Array(n),B=new Float32Array(n);
     for(let p=0;p<n;p++){const c=lab(px[p*4],px[p*4+1],px[p*4+2]);L[p]=c[0];A[p]=c[1];B[p]=c[2]}
     const med=arr=>{const t=[];for(let p=0;p<n;p+=7)t.push(arr[p]);t.sort((x,y)=>x-y);return t[t.length>>1]};
-    const wall=[med(L),med(A),med(B)];
-    const C=p=>Math.hypot(A[p],B[p]),hue=p=>(Math.atan2(B[p],A[p])*180/Math.PI+360)%360;
-    // 淡彩色（如 4.mov 的青蓝：彩度只有 8–15）：色相和墙差 60° 以上，彩度 8 就算彩色（太暗的不算，黑点常带一点蓝）；和墙同色系仍要 18，免得墙的阴影混进来
-    const wallC=Math.hypot(wall[1],wall[2]),wallH=(Math.atan2(wall[2],wall[1])*180/Math.PI+360)%360;
-    const chromatic=p=>{const c=C(p);if(c>=CHROMA)return true;if(c<8||wallC<5||L[p]<40)return false;const d=Math.abs(hue(p)-wallH)%360;return(d>180?360-d:d)>=60};
-    const cls=p=>chromatic(p)?Math.floor(hue(p)/30):L[p]<50?12:13;   // 0..11 彩色，12 深，13 浅
+    const wall=[med(L),med(A),med(B)],wallC=Math.hypot(wall[1],wall[2]);
+    // 墙的明暗变化（阴影、灯光照亮的一片）：亮度变了，色相不变，彩度和亮度同比例变化。灰色岩点的彩度比例低得多，不会被当成墙
+    const wallLike=p=>{
+      if(L[p]<25)return false;
+      const r=L[p]/wall[0];
+      if(wallC<8&&r<0.55)return false;   // 白墙没有色相可比，太暗的不算阴影
+      // 被灯照亮的墙会褪色，比例对不上，但色相还是墙的
+      if(r>1&&wallC>=8&&Math.hypot(A[p],B[p])>=6){const d=Math.abs(Math.atan2(B[p],A[p])-Math.atan2(wall[2],wall[1]))*180/Math.PI;if((d>180?360-d:d)<30)return true}
+      return Math.hypot(A[p]-wall[1]*r,B[p]-wall[2]*r)<Math.max(5,wallC*0.3);
+    };
     const y0=Math.round(h*0.03),y1=Math.round(h*0.9);   // 顶上一条（天花板/横幅）和底下的地垫不算
     const cand=new Uint8Array(n);
-    for(let y=y0;y<y1;y++)for(let x=0;x<w;x++){const p=y*w+x;if(Math.hypot(L[p]-wall[0],A[p]-wall[1],B[p]-wall[2])>DE)cand[p]=1}
-    // 投票
-    const votes=new Array(14).fill(0),pix=[],hues=[];
+    for(let y=y0;y<y1;y++)for(let x=0;x<w;x++){const p=y*w+x;if(Math.hypot(L[p]-wall[0],A[p]-wall[1],B[p]-wall[2])>DE&&!wallLike(p))cand[p]=1}
+    // 1 分块：区域生长，新像素和这一块当前的平均色相近才并进来
+    const lb=new Int32Array(n),blobs=[null],q=[];
+    for(let i=0;i<n;i++){
+      if(!cand[i]||lb[i])continue;
+      const b={id:blobs.length,area:0,l:0,a:0,b:0,x0:w,y0:h,x1:0,y1:0,hits:0,edge:false,w:0};
+      blobs.push(b);lb[i]=b.id;q.length=0;q.push(i);
+      while(q.length){
+        const p=q.pop(),x=p%w,y=(p/w)|0;
+        b.area++;b.l+=L[p];b.a+=A[p];b.b+=B[p];
+        b.x0=Math.min(b.x0,x);b.x1=Math.max(b.x1,x);b.y0=Math.min(b.y0,y);b.y1=Math.max(b.y1,y);
+        if(x===0||x===w-1)b.edge=true;
+        for(const k of [x>0?p-1:-1,x<w-1?p+1:-1,p-w,p+w]){
+          if(k<0||k>=n||!cand[k]||lb[k])continue;
+          if(Math.hypot(0.5*(L[k]-b.l/b.area),A[k]-b.a/b.area,B[k]-b.b/b.area)<=BLOB_DE){lb[k]=b.id;q.push(k)}
+        }
+      }
+      b.c=[b.l/b.area,b.a/b.area,b.b/b.area];
+    }
+    const real=b=>b&&b.area>=MIN_AREA&&b.area<n*0.25;
+    // 2 接触
     for(const s of samples){
-      const cx=Math.floor(s.x/2),cy=Math.floor(s.y/2),hist=new Array(14).fill(0),mine=[];
-      for(let dy=-14;dy<=14;dy++)for(let dx=-14;dx<=14;dx++){const X=cx+dx,Y=cy+dy;if(dx*dx+dy*dy>196||X<0||Y<0||X>=w||Y>=h)continue;const p=Y*w+X;if(cand[p]){hist[cls(p)]++;mine.push(p)}}
-      const tot=hist.reduce((a,v)=>a+v,0);if(tot<6)continue;
-      const k=hist.indexOf(Math.max(...hist));if(s.foot&&k>=12)continue;   // 脚点只给彩色投票：脚旁的阴影、高光会把深/浅色线的票打散
-      const own=mine.filter(p=>cls(p)===k);votes[k]++;pix.push(...own.map(p=>[k,p]));
-      if(k<12){const hs=own.map(hue).sort((a,b)=>a-b);hues.push([k,hs[hs.length>>1]])}
+      const cx=Math.floor(s.x/2),cy=Math.floor(s.y/2),cnt=new Map();
+      for(let dy=-TOUCH_R;dy<=TOUCH_R;dy++)for(let dx=-TOUCH_R;dx<=TOUCH_R;dx++){
+        const X=cx+dx,Y=cy+dy;if(dx*dx+dy*dy>TOUCH_R*TOUCH_R||X<0||Y<0||X>=w||Y>=h)continue;
+        const k=lb[Y*w+X];if(k&&real(blobs[k]))cnt.set(k,(cnt.get(k)||0)+1);
+      }
+      let best=0,bn=5;for(const [k,v] of cnt)if(v>bn){bn=v;best=k}
+      if(best){const b=blobs[best];b.hits++;b.w+=s.foot?1:2}
     }
-    // 同一种颜色可能跨在相邻两档上（青蓝 h≈185–215 跨 180° 那档和 210° 那档），彩色档和票多的邻档合计
-    const nb=k=>votes[(k+1)%12]>=votes[(k+11)%12]?(k+1)%12:(k+11)%12;
-    // 深/浅档常常是抓点旁的阴影、高光，不是岩点本身，所以打七折；彩色的占比也只和彩色票比
-    const score=k=>k<12?votes[k]+votes[nb(k)]:votes[k]*0.7;
-    let win=0;for(let k=1;k<14;k++)if(score(k)>score(win)||(score(k)===score(win)&&votes[k]>votes[win]))win=k;
-    if(!score(win))return{mask:new Uint8Array(n),ref:null,kept:0};
-    if(win<12&&votes[nb(win)]>votes[win])win=nb(win);   // 以票多的那档为中心
-    const same=k=>k===win||(win<12&&k===nb(win));
-    const ps=pix.filter(q=>same(q[0])).map(q=>q[1]);
-    const mean=f=>ps.reduce((a,p)=>a+f(p),0)/ps.length;
-    // 参考色相：投给获胜类的那些抓点，各自主色相的中值（以获胜类中心为基准展开，跨 0° 也对）
-    const c0=win*30+15,unwrap=x=>{let d=x-c0;if(d>180)d-=360;if(d<-180)d+=360;return d};
-    const hv=hues.filter(q=>same(q[0])).map(q=>unwrap(q[1])).sort((a,b)=>a-b);
-    const ref={cls:win,L:mean(p=>L[p]),C:mean(C),hue:hv.length?(c0+hv[hv.length>>1]+360)%360:c0,votes:win<12?score(win):votes[win],of:votes.reduce((a,v,k)=>win<12&&k>=12?a:a+v,0)};
-    if(ref.votes/ref.of<MIN_SHARE){ref.unsure=true;return{mask:new Uint8Array(n),ref,kept:0}}
-    const hd=x=>{const d=Math.abs(x-ref.hue)%360;return d>180?360-d:d};
-    let m=new Uint8Array(n);
-    for(let p=0;p<n;p++){
-      if(!cand[p])continue;
-      if(win<12)m[p]=C(p)>=Math.max(8,0.5*ref.C)&&hd(hue(p))<=HUE_TOL&&Math.abs(L[p]-ref.L)<=30?1:0;
-      else if(win===12)m[p]=!chromatic(p)&&L[p]<=Math.min(45,ref.L+10)?1:0;
-      else m[p]=C(p)<CHROMA+4&&L[p]>=ref.L-15?1:0;
+    const touched=blobs.filter(b=>b&&b.hits);
+    if(!touched.length)return{mask:new Uint8Array(n),ref:null,kept:0};
+    const weight=b=>Math.min(b.w,4);
+    // 3 定颜色：以每一块被碰过的岩点为中心，看同色的总分量
+    let top=null,topW=-1;
+    let topN=0;
+    for(const t of touched){
+      const near=touched.filter(b=>colorDist(t.c,b.c)<=SAME),v=near.reduce((a,b)=>a+weight(b),0);
+      if(v>topW||(v===topW&&near.length>topN)){topW=v;top=t;topN=near.length}   // 分量相同时，碰过的岩点多的那组更可能是路线
     }
-    m=dilate(erode(m,w,h,1),w,h,1);   // 开运算 3×3（去零星像素）
-    m=erode(dilate(m,w,h,2),w,h,2);   // 闭运算 5×5（补岩点上的螺丝孔、高光）
-    const {lab:lb,st,n:nc}=label(m,w,h),ok=new Uint8Array(nc+1);let kept=0;
-    const touched=new Set();
-    for(const sp of samples){if(sp.foot&&win>=12)continue;const cx=Math.floor(sp.x/2),cy=Math.floor(sp.y/2);
-      for(let dy=-14;dy<=14;dy++)for(let dx=-14;dx<=14;dx++){const X=cx+dx,Y=cy+dy;if(dx*dx+dy*dy<=196&&X>=0&&Y>=0&&X<w&&Y<h&&lb[Y*w+X])touched.add(lb[Y*w+X])}}
-    // 外接框：长边不超过画面宽的 1/3，填充率 ≥0.25（长条阴影、墙边线都很空）
-    const bb=Array.from({length:nc+1},()=>[w,h,0,0]);
-    for(let p=0;p<n;p++){const k=lb[p];if(!k)continue;const x=p%w,y=(p/w)|0,b=bb[k];if(x<b[0])b[0]=x;if(y<b[1])b[1]=y;if(x>b[2])b[2]=x;if(y>b[3])b[3]=y}
-    for(let k=1;k<=nc;k++){
-      const b=bb[k],bw=b[2]-b[0]+1,bh=b[3]-b[1]+1;
-      const fine=st[k].area>=30&&st[k].area<MAX_AREA&&Math.max(bw,bh)<=w/3&&st[k].area/(bw*bh)>=0.25;
-      if(win<12?st[k].area>=30&&st[k].area<n*0.25:fine||(touched.has(k)&&st[k].area<n*0.06)){ok[k]=1;kept++}
+    const group=touched.filter(b=>colorDist(top.c,b.c)<=SAME),tot=touched.reduce((a,b)=>a+weight(b),0);
+    const sum=group.reduce((a,b)=>[a[0]+b.c[0]*b.area,a[1]+b.c[1]*b.area,a[2]+b.c[2]*b.area,a[3]+b.area],[0,0,0,0]);
+    const c=[sum[0]/sum[3],sum[1]/sum[3],sum[2]/sum[3]],C=Math.hypot(c[1],c[2]),hue=(Math.atan2(c[2],c[1])*180/Math.PI+360)%360;
+    const ref={cls:C>=8?Math.floor(hue/30):c[0]<50?12:13,L:c[0],C,hue,votes:topW,of:tot,holds:group.length};
+    // 确定性：占比够，而且明显领先第二名（路线颜色的岩点常被高光拆成几块，只看过半太严）
+    const rest=touched.filter(b=>!group.includes(b));let second=0;
+    for(const t of rest)second=Math.max(second,rest.reduce((a,b)=>a+(colorDist(t.c,b.c)<=SAME?weight(b):0),0));
+    ref.second=second;
+    if(topW/tot<MIN_SHARE||topW<second*LEAD){ref.unsure=true;return{mask:new Uint8Array(n),ref,kept:0}}
+    // 4 路线
+    const inGroup=new Set(group.map(b=>b.id)),keep=new Uint8Array(n);let kept=0;
+    const shaped=b=>{const bw=b.x1-b.x0+1,bh=b.y1-b.y0+1;return b.area<MAX_AREA&&Math.max(bw,bh)<=w/3&&b.area/(bw*bh)>=0.25&&!b.edge};
+    const ok=new Uint8Array(blobs.length);
+    for(const b of blobs){
+      if(!real(b))continue;
+      if(inGroup.has(b.id)||(colorDist(c,b.c)<=SAME&&(Math.hypot(b.c[1],b.c[2])>=8||shaped(b)))){ok[b.id]=1;kept++}
     }
-    const keep=new Uint8Array(n);for(let p=0;p<n;p++)if(ok[lb[p]])keep[p]=1;
+    for(let p=0;p<n;p++)if(ok[lb[p]])keep[p]=1;
+    const closed=erode(dilate(keep,w,h,2),w,h,2);   // 闭运算 5×5（补岩点上的螺丝孔、高光）
     // 填洞：从边界出发走不到的空白就是洞
-    const out=new Uint8Array(n),q=[];
-    for(let x=0;x<w;x++){q.push(x,(h-1)*w+x)}for(let y=0;y<h;y++){q.push(y*w,y*w+w-1)}
-    while(q.length){const p=q.pop();if(keep[p]||out[p])continue;out[p]=1;const x=p%w,y=(p/w)|0;if(x>0)q.push(p-1);if(x<w-1)q.push(p+1);if(y>0)q.push(p-w);if(y<h-1)q.push(p+w)}
+    const out=new Uint8Array(n),st=[];
+    for(let x=0;x<w;x++){st.push(x,(h-1)*w+x)}for(let y=0;y<h;y++){st.push(y*w,y*w+w-1)}
+    while(st.length){const p=st.pop();if(closed[p]||out[p])continue;out[p]=1;const x=p%w,y=(p/w)|0;if(x>0)st.push(p-1);if(x<w-1)st.push(p+1);if(y>0)st.push(p-w);if(y<h-1)st.push(p+w)}
     for(let p=0;p<n;p++)out[p]=out[p]?0:1;
     return{mask:dilate(out,w,h,1),ref,kept};
   }

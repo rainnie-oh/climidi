@@ -27,6 +27,17 @@ const Viz=(()=>{
   const NEAR=13;   // 外扩半径（720 坐标）。想更饱满可到 18，别超过 20（=40px 核），会糊
   function segD(px,py,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy,u=l?Math.max(0,Math.min(1,((px-a[0])*dx+(py-a[1])*dy)/l)):0;return Math.hypot(px-a[0]-u*dx,py-a[1]-u*dy)}
   function coverage(i){
+    const seg=Sil.get(i);
+    if(seg&&seg.seg){   // 分割蒙版本身就是人形，不用骨架限制范围，也不叠骨架（关键点偶尔不准时人形不会跟着抽）
+      const grid=new Float32Array(GW*GH),sc=360/180;
+      const gx0=Math.floor(seg.x0*sc/4),gx1=Math.min(GW-1,Math.floor((seg.x0+seg.w)*sc/4)),gy0=Math.floor(seg.y0*sc/4),gy1=Math.min(GH-1,Math.floor((seg.y0+seg.h)*sc/4));
+      for(let gy=gy0;gy<=gy1;gy++)for(let gx=gx0;gx<=gx1;gx++){
+        let hit=0;for(let sy=0;sy<4;sy++)for(let sx=0;sx<4;sx++)if(Sil.at(seg,gx*4+sx,gy*4+sy))hit++;
+        grid[gy*GW+gx]=hit/16;
+      }
+      return grid;
+    }
+    if(Sil.hasMasks)return new Float32Array(GW*GH);   // 有蒙版的视频里这一帧没蒙版 = 人不在画面里，不画骨架假人
     const p={};['Ls','Rs','Lw','Rw','Lh','Rh','La','Ra'].forEach(k=>p[k]=pt(k,i));
     const sm=[(p.Ls[0]+p.Rs[0])/2,(p.Ls[1]+p.Rs[1])/2],hm=[(p.Lh[0]+p.Rh[0])/2,(p.Lh[1]+p.Rh[1])/2];
     const head=[sm[0]+(sm[0]-hm[0])*0.38,sm[1]+(sm[1]-hm[1])*0.38];
@@ -178,6 +189,7 @@ const Viz=(()=>{
       // 这一帧没认到攀岩者（还在走向岩壁、走出画面）就不画人，否则人形会停在第一次认到的位置，和视频里的人对不上
       const row=CLIMB_DATA.kp[i],seen=row&&[2,5,8,11,14,17,20,23].some(k=>row[k]>=35);
       if(seen){rings(g,i);body(g,i);trails(g,i);nodes(g,i,t,css)}
+      else if(Sil.get(i)){rings(g,i);body(g,i)}   // 模型跟丢但人形还在：只画人形，手脚没有数据
       burst(g,t,css);
       if(DEBUG)diag(g,css);
     },
